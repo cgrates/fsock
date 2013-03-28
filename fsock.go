@@ -322,8 +322,6 @@ func (self *fSock) dispatchEvent(event string) {
 	}
 }
 
-
-
 // Connects to FS and starts buffering input
 func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string), eventFilters map[string]string, l *syslog.Writer) (*fSock, error) {
 	fsock := fSock{fsaddress: fsaddr, fspaswd: fspaswd, eventHandlers: eventHandlers, eventFilters: eventFilters, reconnects: reconnects, logger: l}

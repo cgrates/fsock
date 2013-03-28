@@ -117,20 +117,20 @@ func TestReadEvents(t *testing.T) {
 	FS.buffer = bufio.NewReader(r)
 	var events int32
 	FS.eventHandlers = map[string][]func(string){
-		"HEARTBEAT":                []func(string) { func(string) { events++ } },
-		"RE_SCHEDULE":              []func(string) { func(string) { events++ } },
-		"CHANNEL_STATE":            []func(string) { func(string) { events++ } },
-		"CODEC":                    []func(string) { func(string) { events++ } },
-		"CHANNEL_CREATE":           []func(string) { func(string) { events++ } },
-		"CHANNEL_CALLSTATE":        []func(string) { func(string) { events++ } },
-		"API":                      []func(string) { func(string) { events++ } },
-		"CHANNEL_EXECUTE":          []func(string) { func(string) { events++ } },
-		"CHANNEL_EXECUTE_COMPLETE": []func(string) { func(string) { events++ } },
-		"CHANNEL_PARK":             []func(string) { func(string) { events++ } },
-		"CHANNEL_HANGUP":           []func(string) { func(string) { events++ } },
-		"CHANNEL_HANGUP_COMPLETE":  []func(string) { func(string) { events++ } },
-		"CHANNEL_UNPARK":           []func(string) { func(string) { events++ } },
-		"CHANNEL_DESTROY":          []func(string) { func(string) { events++ } },
+		"HEARTBEAT":                []func(string){func(string) { events++ }},
+		"RE_SCHEDULE":              []func(string){func(string) { events++ }},
+		"CHANNEL_STATE":            []func(string){func(string) { events++ }},
+		"CODEC":                    []func(string){func(string) { events++ }},
+		"CHANNEL_CREATE":           []func(string){func(string) { events++ }},
+		"CHANNEL_CALLSTATE":        []func(string){func(string) { events++ }},
+		"API":                      []func(string){func(string) { events++ }},
+		"CHANNEL_EXECUTE":          []func(string){func(string) { events++ }},
+		"CHANNEL_EXECUTE_COMPLETE": []func(string){func(string) { events++ }},
+		"CHANNEL_PARK":             []func(string){func(string) { events++ }},
+		"CHANNEL_HANGUP":           []func(string){func(string) { events++ }},
+		"CHANNEL_HANGUP_COMPLETE":  []func(string){func(string) { events++ }},
+		"CHANNEL_UNPARK":           []func(string){func(string) { events++ }},
+		"CHANNEL_DESTROY":          []func(string){func(string) { events++ }},
 	}
 	go FS.ReadEvents()
 	w.Write(data)
