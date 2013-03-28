@@ -55,7 +55,7 @@ func isSliceMember(ss []string, s string) bool {
 }
 
 // Convert fseventStr into fseventMap
-func fSEventStrToMap(fsevstr string, headers []string) map[string]string {
+func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 	fsevent := make(map[string]string)
 	filtered := false
 	if len(headers) != 0 {
@@ -81,7 +81,7 @@ func fib() func() int {
 	}
 }
 
-var fs *fSock // Used to share FS connection via package globals (singleton)
+var FS *fSock // Used to share FS connection via package globals
 
 // Connection to FreeSWITCH Socket
 type fSock struct {
@@ -223,6 +223,7 @@ func (self *fSock) Connect() error {
 	for i := 0; i < self.reconnects; i++ {
 		self.conn, conErr = net.Dial("tcp", self.fsaddress)
 		if conErr == nil {
+			self.logger.Info("Successfully connected to FreeSWITCH")
 			// Connected, init buffer, auth and subscribe to desired events and filters
 			self.buffer = bufio.NewReaderSize(self.conn, 8192) // reinit buffer
 			if authChg, err := self.readHeaders(); err != nil || !strings.Contains(authChg, "auth/request") {
@@ -325,7 +326,7 @@ func (self *fSock) dispatchEvent(event string) {
 
 // Connects to FS and starts buffering input
 func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string), eventFilters map[string]string, l *syslog.Writer) (*fSock, error) {
-	fsock := fSock{fsaddress: fsaddr, fspaswd: fspaswd, eventHandlers: eventHandlers, eventFilters: eventFilters, logger: l}
+	fsock := fSock{fsaddress: fsaddr, fspaswd: fspaswd, eventHandlers: eventHandlers, eventFilters: eventFilters, reconnects: reconnects, logger: l}
 	fsock.apiChan = make(chan string) // Init apichan so we can use it to pass api replies
 	fsock.cmdChan = make(chan string)
 	fsock.delayFunc = fib()

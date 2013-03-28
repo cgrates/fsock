@@ -40,10 +40,10 @@ func TestHeaders(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating pype!")
 	}
-	fs = &fSock{}
-	fs.buffer = bufio.NewReader(r)
+	FS = &fSock{}
+	FS.buffer = bufio.NewReader(r)
 	w.Write([]byte(HEADER))
-	h, err := fs.readHeaders()
+	h, err := FS.readHeaders()
 	if err != nil || h != "Content-Length: 564\nContent-Type: text/event-plain\n" {
 		t.Error("Error parsing headers: ", h, err)
 	}
@@ -54,10 +54,10 @@ func TestEvent(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating pype!")
 	}
-	fs = &fSock{}
-	fs.buffer = bufio.NewReader(r)
+	FS = &fSock{}
+	FS.buffer = bufio.NewReader(r)
 	w.Write([]byte(HEADER + BODY))
-	h, b, err := fs.readEvent()
+	h, b, err := FS.readEvent()
 	if err != nil || h != HEADER[:len(HEADER)-1] || len(b) != 564 {
 		t.Error("Error parsing event: ", h, b, len(b))
 	}
@@ -85,7 +85,7 @@ func TestHeaderValEnd(t *testing.T) {
 }
 
 func TestEventToMapUnfiltered(t *testing.T) {
-	fields := fSEventStrToMap(BODY, nil)
+	fields := FSEventStrToMap(BODY, nil)
 	if fields["Event-Name"] != "RE_SCHEDULE" {
 		t.Error("Event not parsed correctly: ", fields)
 	}
@@ -95,7 +95,7 @@ func TestEventToMapUnfiltered(t *testing.T) {
 }
 
 func TestEventToMapFiltered(t *testing.T) {
-	fields := fSEventStrToMap(BODY, []string{"Event-Name", "Task-Group", "Event-Date-GMT"})
+	fields := FSEventStrToMap(BODY, []string{"Event-Name", "Task-Group", "Event-Date-GMT"})
 	if fields["Event-Date-Local"] != "2012-10-05 13:41:38" {
 		t.Error("Event not parsed correctly: ", fields)
 	}
@@ -113,10 +113,10 @@ func TestReadEvents(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating pipe!")
 	}
-	fs = &fSock{}
-	fs.buffer = bufio.NewReader(r)
+	FS = &fSock{}
+	FS.buffer = bufio.NewReader(r)
 	var events int32
-	fs.eventHandlers = map[string][]func(string){
+	FS.eventHandlers = map[string][]func(string){
 		"HEARTBEAT":                []func(string) { func(string) { events++ } },
 		"RE_SCHEDULE":              []func(string) { func(string) { events++ } },
 		"CHANNEL_STATE":            []func(string) { func(string) { events++ } },
@@ -132,7 +132,7 @@ func TestReadEvents(t *testing.T) {
 		"CHANNEL_UNPARK":           []func(string) { func(string) { events++ } },
 		"CHANNEL_DESTROY":          []func(string) { func(string) { events++ } },
 	}
-	go fs.ReadEvents()
+	go FS.ReadEvents()
 	w.Write(data)
 	time.Sleep(50 * time.Millisecond)
 	if events != 45 {
