@@ -40,7 +40,7 @@ func TestHeaders(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating pype!")
 	}
-	FS = &fSock{}
+	FS = &FSock{}
 	FS.buffer = bufio.NewReader(r)
 	w.Write([]byte(HEADER))
 	h, err := FS.readHeaders()
@@ -54,7 +54,7 @@ func TestEvent(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating pype!")
 	}
-	FS = &fSock{}
+	FS = &FSock{}
 	FS.buffer = bufio.NewReader(r)
 	w.Write([]byte(HEADER + BODY))
 	h, b, err := FS.readEvent()
@@ -113,7 +113,7 @@ func TestReadEvents(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating pipe!")
 	}
-	FS = &fSock{}
+	FS = &FSock{}
 	FS.buffer = bufio.NewReader(r)
 	var events int32
 	FS.eventHandlers = map[string][]func(string){
