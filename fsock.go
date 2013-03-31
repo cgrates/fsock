@@ -223,7 +223,7 @@ func (self *FSock) Connect() error {
 	for i := 0; i < self.reconnects; i++ {
 		self.conn, conErr = net.Dial("tcp", self.fsaddress)
 		if conErr == nil {
-			self.logger.Info("Successfully connected to FreeSWITCH")
+			self.logger.Info("<FSock> Successfully connected to FreeSWITCH!")
 			// Connected, init buffer, auth and subscribe to desired events and filters
 			self.buffer = bufio.NewReaderSize(self.conn, 8192) // reinit buffer
 			if authChg, err := self.readHeaders(); err != nil || !strings.Contains(authChg, "auth/request") {
@@ -291,7 +291,7 @@ func (self *FSock) ReadEvents() {
 	for {
 		hdr, body, err := self.readEvent()
 		if err != nil {
-			self.logger.Warning("FreeSWITCH connection broken: attemting reconnect")
+			self.logger.Warning("<FSock> FreeSWITCH connection broken: attemting reconnect")
 			connErr := self.Connect()
 			if connErr != nil {
 				return

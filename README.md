@@ -5,10 +5,10 @@
 `go get github.com/cgrates/fsock`
 
 ## Support ##
-Join [CGRateS](http://www.cgrates.org/ "CGRateS Website") on Google Groups [here](https://groups.google.com/forum/#!forum/cgrates "CGRateS on GoogleGroups")
+Join [CGRateS](http://www.cgrates.org/ "CGRateS Website") on Google Groups [here](https://groups.google.com/forum/#!forum/cgrates "CGRateS on GoogleGroups").
 
 ## License ##
-fsock.go is released under the [MIT License](http://www.opensource.org/licenses/mit-license.php "MIT License")
+fsock.go is released under the [MIT License](http://www.opensource.org/licenses/mit-license.php "MIT License").
 Copyright (C) ITsysCOM. All Rights Reserved.
 
 ## Sample usage code ##
@@ -42,9 +42,9 @@ func main() {
     fs, err := fsock.NewFSock("127.0.0.1:8021", "ClueCon", 10, evHandlers, evFilters, l)
     if err != nil {
         l.Crit(fmt.Sprintf("FreeSWITCH error:", err))
-		return
-	} else if !fs.Connected() {
-		l.Warning("Cannot connect to FreeSWITCH")
+	return
+    } else if !fs.Connected() {
+	l.Warning("Cannot connect to FreeSWITCH")
         return
     }
     fs.ReadEvents()
