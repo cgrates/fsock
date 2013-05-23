@@ -51,5 +51,5 @@ func main() {
 }
 ```
 
-Continous integration: [![Build Status](https://drone.io/github.com/cgrates/fsock/status.png)](https://drone.io/github.com/cgrates/fsock/latest)
+[![Build Status](https://drone.io/github.com/cgrates/fsock/status.png)](https://drone.io/github.com/cgrates/fsock/latest)
 
