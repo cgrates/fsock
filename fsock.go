@@ -72,6 +72,28 @@ func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 	return fsevent
 }
 
+// Converts string received from fsock into a list of channel info, each represented in a map
+func MapChanData(chanInfoStr string) []map[string]string {
+	chansInfoMap := make([]map[string]string,0)
+	spltChanInfo := strings.Split(chanInfoStr, "\n")
+	if len(spltChanInfo) <= 5 {
+		return chansInfoMap
+	}
+	hdrs := strings.Split(spltChanInfo[2],",")
+	for _, chanInfoLn := range spltChanInfo[3:len(spltChanInfo)-3] {
+		chanInfo := strings.Split(chanInfoLn, ",")
+		if len(hdrs) != len(chanInfo) {
+			continue
+		}
+		chnMp := make(map[string]string,0)
+		for iHdr, hdr := range hdrs {
+			chnMp[hdr] = chanInfo[iHdr]
+		}
+		chansInfoMap = append(chansInfoMap, chnMp)
+	}
+	return chansInfoMap
+}
+
 // successive Fibonacci numbers.
 func fib() func() int {
 	a, b := 0, 1
@@ -252,17 +274,17 @@ func (self *FSock) Connect() error {
 }
 
 // Send API command
-func (self *FSock) SendApiCmd(cmdStr string) error {
+func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
 	if !self.Connected() {
-		return errors.New("Not connected to FS")
+		return "", errors.New("Not connected to FS")
 	}
 	cmd := fmt.Sprintf("api %s\n\n", cmdStr)
 	fmt.Fprint(self.conn, cmd)
 	resEvent := <-self.apiChan
 	if strings.Contains(resEvent, "-ERR") {
-		return errors.New("Command failed")
+		return "", errors.New("Command failed")
 	}
-	return nil
+	return resEvent, nil
 }
 
 // SendMessage command
