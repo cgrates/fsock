@@ -74,18 +74,18 @@ func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 
 // Converts string received from fsock into a list of channel info, each represented in a map
 func MapChanData(chanInfoStr string) []map[string]string {
-	chansInfoMap := make([]map[string]string,0)
+	chansInfoMap := make([]map[string]string, 0)
 	spltChanInfo := strings.Split(chanInfoStr, "\n")
 	if len(spltChanInfo) <= 5 {
 		return chansInfoMap
 	}
-	hdrs := strings.Split(spltChanInfo[2],",")
-	for _, chanInfoLn := range spltChanInfo[3:len(spltChanInfo)-3] {
+	hdrs := strings.Split(spltChanInfo[2], ",")
+	for _, chanInfoLn := range spltChanInfo[3 : len(spltChanInfo)-3] {
 		chanInfo := strings.Split(chanInfoLn, ",")
 		if len(hdrs) != len(chanInfo) {
 			continue
 		}
-		chnMp := make(map[string]string,0)
+		chnMp := make(map[string]string, 0)
 		for iHdr, hdr := range hdrs {
 			chnMp[hdr] = chanInfo[iHdr]
 		}
@@ -355,4 +355,46 @@ func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][
 		return nil, errConn
 	}
 	return &fsock, nil
+}
+
+// Connection handler for commands sent to FreeSWITCH
+type FSockPool struct {
+	fsAddr, fsPasswd string
+	reconnects       int
+	eventHandlers    map[string][]func(string)
+	eventFilters     map[string]string
+	logger           *syslog.Writer
+	fSocks           chan *FSock // Keep here reference towards the list of opened sockets
+}
+
+func (self *FSockPool) PopFSock() (*FSock, error) {
+	fsock := <-self.fSocks
+	if fsock == nil {
+		sock, err := NewFSock(self.fsAddr, self.fsPasswd, self.reconnects, self.eventHandlers, self.eventFilters, self.logger)
+		if err != nil {
+			return nil, err
+		} else {
+			go sock.ReadEvents() // Read events permanently, errors will be detected on connection returned to the pool
+		}
+		return sock, nil
+	} else {
+		return fsock, nil
+	}
+}
+
+func (self *FSockPool) PushFSock(fsk *FSock) {
+	if fsk.Connected() { // We only add it back if the socket is still connected
+		self.fSocks <- fsk
+	}
+}
+
+// Instantiates a new FSockPool
+func NewFSockPool(maxFSocks int,
+	fsaddr, fspasswd string, reconnects int, eventHandlers map[string][]func(string), eventFilters map[string]string, l *syslog.Writer) (*FSockPool, error) {
+	pool := &FSockPool{fsAddr: fsaddr, fsPasswd: fspasswd, reconnects: reconnects, eventHandlers: eventHandlers, eventFilters: eventFilters, logger: l}
+	pool.fSocks = make(chan *FSock, maxFSocks)
+	for i := 0; i < maxFSocks; i++ {
+		pool.fSocks <- nil // Empty initiate so we do not need to wait later when we pop
+	}
+	return pool, nil
 }
