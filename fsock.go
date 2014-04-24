@@ -74,18 +74,18 @@ func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 
 // Converts string received from fsock into a list of channel info, each represented in a map
 func MapChanData(chanInfoStr string) []map[string]string {
-	chansInfoMap := make([]map[string]string,0)
+	chansInfoMap := make([]map[string]string, 0)
 	spltChanInfo := strings.Split(chanInfoStr, "\n")
 	if len(spltChanInfo) <= 5 {
 		return chansInfoMap
 	}
-	hdrs := strings.Split(spltChanInfo[2],",")
-	for _, chanInfoLn := range spltChanInfo[3:len(spltChanInfo)-3] {
+	hdrs := strings.Split(spltChanInfo[2], ",")
+	for _, chanInfoLn := range spltChanInfo[3 : len(spltChanInfo)-3] {
 		chanInfo := strings.Split(chanInfoLn, ",")
 		if len(hdrs) != len(chanInfo) {
 			continue
 		}
-		chnMp := make(map[string]string,0)
+		chnMp := make(map[string]string, 0)
 		for iHdr, hdr := range hdrs {
 			chnMp[hdr] = chanInfo[iHdr]
 		}
@@ -245,7 +245,9 @@ func (self *FSock) Connect() error {
 	for i := 0; i < self.reconnects; i++ {
 		self.conn, conErr = net.Dial("tcp", self.fsaddress)
 		if conErr == nil {
-			self.logger.Info("<FSock> Successfully connected to FreeSWITCH!")
+			if self.logger != nil {
+				self.logger.Info("<FSock> Successfully connected to FreeSWITCH!")
+			}
 			// Connected, init buffer, auth and subscribe to desired events and filters
 			self.buffer = bufio.NewReaderSize(self.conn, 8192) // reinit buffer
 			if authChg, err := self.readHeaders(); err != nil || !strings.Contains(authChg, "auth/request") {
@@ -313,7 +315,9 @@ func (self *FSock) ReadEvents() {
 	for {
 		hdr, body, err := self.readEvent()
 		if err != nil {
-			self.logger.Warning("<FSock> FreeSWITCH connection broken: attemting reconnect")
+			if self.logger != nil {
+				self.logger.Warning("<FSock> FreeSWITCH connection broken: attemting reconnect")
+			}
 			connErr := self.Connect()
 			if connErr != nil {
 				return
