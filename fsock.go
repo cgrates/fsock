@@ -224,15 +224,16 @@ func (self *FSock) filterEvents(filters map[string]string) error {
 	if len(filters) == 0 { //Nothing to filter
 		return nil
 	}
-	cmd := "filter"
+
 	for hdr, val := range filters {
-		cmd += " " + hdr + " " + val
+		cmd := "filter " + hdr + " " + val + "\n\n"
+		fmt.Fprint(self.conn, cmd)
+		if rply, err := self.readHeaders(); err != nil ||
+			!strings.Contains(rply, "Reply-Text: +OK") {
+			return errors.New("filter error")
+		}
 	}
-	cmd += "\n\n"
-	fmt.Fprint(self.conn, cmd)
-	if rply, err := self.readHeaders(); err != nil || !strings.Contains(rply, "Reply-Text: +OK") {
-		return errors.New("filter error")
-	}
+
 	return nil
 }
 
