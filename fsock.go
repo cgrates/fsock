@@ -340,10 +340,14 @@ func (self *FSock) ReadEvents() {
 // Dispatch events to handlers in async mode
 func (self *FSock) dispatchEvent(event string) {
 	eventName := headerVal(event, "Event-Name")
-	if _, hasHandlers := self.eventHandlers[eventName]; hasHandlers {
-		// We have handlers, dispatch to all of them
-		for _, handlerFunc := range self.eventHandlers[eventName] {
-			go handlerFunc(event)
+	handleNames := []string{eventName, "ALL"}
+
+	for _, handleName := range handleNames {
+		if _, hasHandlers := self.eventHandlers[handleName]; hasHandlers {
+			// We have handlers, dispatch to all of them
+			for _, handlerFunc := range self.eventHandlers[handleName] {
+				go handlerFunc(event)
+			}
 		}
 	}
 }
