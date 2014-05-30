@@ -224,15 +224,16 @@ func (self *FSock) filterEvents(filters map[string]string) error {
 	if len(filters) == 0 { //Nothing to filter
 		return nil
 	}
-	cmd := "filter"
+
 	for hdr, val := range filters {
-		cmd += " " + hdr + " " + val
+		cmd := "filter " + hdr + " " + val + "\n\n"
+		fmt.Fprint(self.conn, cmd)
+		if rply, err := self.readHeaders(); err != nil ||
+			!strings.Contains(rply, "Reply-Text: +OK") {
+			return errors.New("filter error")
+		}
 	}
-	cmd += "\n\n"
-	fmt.Fprint(self.conn, cmd)
-	if rply, err := self.readHeaders(); err != nil || !strings.Contains(rply, "Reply-Text: +OK") {
-		return errors.New("filter error")
-	}
+
 	return nil
 }
 
@@ -340,10 +341,14 @@ func (self *FSock) ReadEvents() {
 // Dispatch events to handlers in async mode
 func (self *FSock) dispatchEvent(event string) {
 	eventName := headerVal(event, "Event-Name")
-	if _, hasHandlers := self.eventHandlers[eventName]; hasHandlers {
-		// We have handlers, dispatch to all of them
-		for _, handlerFunc := range self.eventHandlers[eventName] {
-			go handlerFunc(event)
+	handleNames := []string{eventName, "ALL"}
+
+	for _, handleName := range handleNames {
+		if _, hasHandlers := self.eventHandlers[handleName]; hasHandlers {
+			// We have handlers, dispatch to all of them
+			for _, handlerFunc := range self.eventHandlers[handleName] {
+				go handlerFunc(event)
+			}
 		}
 	}
 }
