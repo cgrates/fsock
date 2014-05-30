@@ -110,7 +110,7 @@ type FSock struct {
 	conn               net.Conn
 	buffer             *bufio.Reader
 	fsaddress, fspaswd string
-	eventHandlers      map[string][]func(string)
+	eventHandlers      map[string][]func(string, *FSock)
 	eventFilters       map[string]string
 	apiChan, cmdChan   chan string
 	reconnects         int
@@ -329,8 +329,7 @@ func (self *FSock) ReadEvents() {
 			self.apiChan <- hdr + body
 		} else if strings.Contains(hdr, "command/reply") {
 			self.cmdChan <- headerVal(hdr, "Reply-Text")
-		}
-		if body != "" { // We got a body, could be event, try dispatching it
+		} else if body != "" { // We got a body, could be event, try dispatching it
 			self.dispatchEvent(body)
 		}
 	}
@@ -347,14 +346,15 @@ func (self *FSock) dispatchEvent(event string) {
 		if _, hasHandlers := self.eventHandlers[handleName]; hasHandlers {
 			// We have handlers, dispatch to all of them
 			for _, handlerFunc := range self.eventHandlers[handleName] {
-				go handlerFunc(event)
+				go handlerFunc(event, self)
+				return
 			}
 		}
 	}
 }
 
 // Connects to FS and starts buffering input
-func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string), eventFilters map[string]string, l *syslog.Writer) (*FSock, error) {
+func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string, *FSock), eventFilters map[string]string, l *syslog.Writer) (*FSock, error) {
 	fsock := FSock{fsaddress: fsaddr, fspaswd: fspaswd, eventHandlers: eventHandlers, eventFilters: eventFilters, reconnects: reconnects, logger: l}
 	fsock.apiChan = make(chan string) // Init apichan so we can use it to pass api replies
 	fsock.cmdChan = make(chan string)
@@ -370,7 +370,7 @@ func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][
 type FSockPool struct {
 	fsAddr, fsPasswd string
 	reconnects       int
-	eventHandlers    map[string][]func(string)
+	eventHandlers    map[string][]func(string, *FSock)
 	eventFilters     map[string]string
 	readEvents       bool // Fork reading events when creating the socket
 	logger           *syslog.Writer
@@ -400,7 +400,7 @@ func (self *FSockPool) PushFSock(fsk *FSock) {
 
 // Instantiates a new FSockPool
 func NewFSockPool(maxFSocks int, readEvents bool,
-	fsaddr, fspasswd string, reconnects int, eventHandlers map[string][]func(string), eventFilters map[string]string, l *syslog.Writer) (*FSockPool, error) {
+	fsaddr, fspasswd string, reconnects int, eventHandlers map[string][]func(string, *FSock), eventFilters map[string]string, l *syslog.Writer) (*FSockPool, error) {
 	pool := &FSockPool{fsAddr: fsaddr, fsPasswd: fspasswd, reconnects: reconnects, eventHandlers: eventHandlers, eventFilters: eventFilters, readEvents: readEvents, logger: l}
 	pool.fSocks = make(chan *FSock, maxFSocks)
 	for i := 0; i < maxFSocks; i++ {
