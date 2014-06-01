@@ -329,8 +329,7 @@ func (self *FSock) ReadEvents() {
 			self.apiChan <- hdr + body
 		} else if strings.Contains(hdr, "command/reply") {
 			self.cmdChan <- headerVal(hdr, "Reply-Text")
-		}
-		if body != "" { // We got a body, could be event, try dispatching it
+		} else if body != "" { // We got a body, could be event, try dispatching it
 			self.dispatchEvent(body)
 		}
 	}
@@ -348,6 +347,7 @@ func (self *FSock) dispatchEvent(event string) {
 			// We have handlers, dispatch to all of them
 			for _, handlerFunc := range self.eventHandlers[handleName] {
 				go handlerFunc(event)
+				return
 			}
 		}
 	}
