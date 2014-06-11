@@ -317,7 +317,7 @@ func (self *FSock) ReadEvents() {
 		hdr, body, err := self.readEvent()
 		if err != nil {
 			if self.logger != nil {
-				self.logger.Warning("<FSock> FreeSWITCH connection broken: attemting reconnect")
+				self.logger.Warning("<FSock> FreeSWITCH connection broken: attempting reconnect")
 			}
 			connErr := self.Connect()
 			if connErr != nil {
