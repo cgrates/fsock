@@ -317,7 +317,7 @@ func (self *FSock) ReadEvents() {
 		hdr, body, err := self.readEvent()
 		if err != nil {
 			if self.logger != nil {
-				self.logger.Warning("<FSock> FreeSWITCH connection broken: attemting reconnect")
+				self.logger.Warning("<FSock> FreeSWITCH connection broken: attempting reconnect")
 			}
 			connErr := self.Connect()
 			if connErr != nil {
@@ -326,7 +326,7 @@ func (self *FSock) ReadEvents() {
 			continue // Connection reset
 		}
 		if strings.Contains(hdr, "api/response") {
-			self.apiChan <- hdr + body
+			self.apiChan <- body
 		} else if strings.Contains(hdr, "command/reply") {
 			self.cmdChan <- headerVal(hdr, "Reply-Text")
 		} else if body != "" { // We got a body, could be event, try dispatching it
