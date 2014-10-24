@@ -125,6 +125,10 @@ func (self *FSock) readHeaders() (s string, err error) {
 	for {
 		readLine, err = self.buffer.ReadBytes('\n')
 		if err != nil {
+			if self.logger != nil {
+				self.logger.Err(fmt.Sprintf("<FSock> Error reading headers: <%s>", err.Error()))
+			}
+			self.Disconnect()
 			return
 		}
 		// No Error, add received to localread buffer
@@ -141,6 +145,10 @@ func (self *FSock) readBody(ln int) (string, error) {
 	bytesRead := make([]byte, ln)
 	for i := 0; i < ln; i++ {
 		if readByte, err := self.buffer.ReadByte(); err != nil {
+			if self.logger != nil {
+				self.logger.Err(fmt.Sprintf("<FSock> Error reading message body: <%s>", err.Error()))
+			}
+			self.Disconnect()
 			return "", err
 		} else { // No Error, add received to localread buffer
 			bytesRead[i] = readByte // Add received line to the local read buffer
@@ -182,7 +190,11 @@ func (self *FSock) Connected() bool {
 // Disconnects from socket
 func (self *FSock) Disconnect() (err error) {
 	if self.conn != nil {
+		if self.logger != nil {
+			self.logger.Info("<FSock> Disconnecting from FreeSWITCH!")
+		}
 		err = self.conn.Close()
+		self.conn = nil
 	}
 	return
 }
@@ -191,9 +203,10 @@ func (self *FSock) Disconnect() (err error) {
 func (self *FSock) auth() error {
 	authCmd := fmt.Sprintf("auth %s\n\n", self.fspaswd)
 	fmt.Fprint(self.conn, authCmd)
-	if rply, err := self.readHeaders(); err != nil || !strings.Contains(rply, "Reply-Text: +OK accepted") {
-		fmt.Println("Got reply to auth:", rply)
-		return errors.New("auth error")
+	if rply, err := self.readHeaders(); err != nil {
+		return err
+	} else if !strings.Contains(rply, "Reply-Text: +OK accepted") {
+		return fmt.Errorf("Unexpected auth reply received: <%s>", rply)
 	}
 	return nil
 }
@@ -212,9 +225,12 @@ func (self *FSock) eventsPlain(events []string) error {
 		eventsCmd += " " + ev
 	}
 	eventsCmd += "\n\n"
-	fmt.Fprint(self.conn, eventsCmd) // Send command here
-	if rply, err := self.readHeaders(); err != nil || !strings.Contains(rply, "Reply-Text: +OK") {
-		return errors.New("event error")
+	fmt.Fprint(self.conn, eventsCmd)
+	if rply, err := self.readHeaders(); err != nil {
+		return err
+	} else if !strings.Contains(rply, "Reply-Text: +OK") {
+		self.Disconnect()
+		return fmt.Errorf("Unexpected events-subscribe reply received: <%s>", rply)
 	}
 	return nil
 }
@@ -228,9 +244,10 @@ func (self *FSock) filterEvents(filters map[string]string) error {
 	for hdr, val := range filters {
 		cmd := "filter " + hdr + " " + val + "\n\n"
 		fmt.Fprint(self.conn, cmd)
-		if rply, err := self.readHeaders(); err != nil ||
-			!strings.Contains(rply, "Reply-Text: +OK") {
-			return errors.New("filter error")
+		if rply, err := self.readHeaders(); err != nil {
+			return err
+		} else if !strings.Contains(rply, "Reply-Text: +OK") {
+			return fmt.Errorf("Unexpected filter-events reply received: <%s>", rply)
 		}
 	}
 
@@ -317,7 +334,7 @@ func (self *FSock) ReadEvents() {
 		hdr, body, err := self.readEvent()
 		if err != nil {
 			if self.logger != nil {
-				self.logger.Warning("<FSock> FreeSWITCH connection broken: attempting reconnect")
+				self.logger.Err(fmt.Sprintf("<FSock> Error reading events: <%s>", err.Error()))
 			}
 			connErr := self.Connect()
 			if connErr != nil {
@@ -333,7 +350,6 @@ func (self *FSock) ReadEvents() {
 			self.dispatchEvent(body)
 		}
 	}
-
 	return
 }
 
@@ -341,15 +357,19 @@ func (self *FSock) ReadEvents() {
 func (self *FSock) dispatchEvent(event string) {
 	eventName := headerVal(event, "Event-Name")
 	handleNames := []string{eventName, "ALL"}
-
+	dispatched := false
 	for _, handleName := range handleNames {
 		if _, hasHandlers := self.eventHandlers[handleName]; hasHandlers {
 			// We have handlers, dispatch to all of them
 			for _, handlerFunc := range self.eventHandlers[handleName] {
 				go handlerFunc(event)
+				dispatched = true
 				return
 			}
 		}
+	}
+	if !dispatched && self.logger != nil {
+		self.logger.Warning(fmt.Sprintf("<FSock> No dispatcher for event: <%+v>", event))
 	}
 }
 
@@ -374,27 +394,38 @@ type FSockPool struct {
 	eventFilters     map[string]string
 	readEvents       bool // Fork reading events when creating the socket
 	logger           *syslog.Writer
-	fSocks           chan *FSock // Keep here reference towards the list of opened sockets
+	allowedConns     chan struct{} // Will be populated with members allowed
+	fSocks           chan *FSock   // Keep here reference towards the list of opened sockets
 }
 
 func (self *FSockPool) PopFSock() (*FSock, error) {
-	fsock := <-self.fSocks
-	if fsock == nil {
-		sock, err := NewFSock(self.fsAddr, self.fsPasswd, self.reconnects, self.eventHandlers, self.eventFilters, self.logger)
-		if err != nil {
-			return nil, err
-		} else if self.readEvents {
-			go sock.ReadEvents() // Read events permanently, errors will be detected on connection returned to the pool
-		}
-		return sock, nil
-	} else {
+	if len(self.fSocks) != 0 { // Select directly if available, so we avoid randomness of selection
+		fsock := <-self.fSocks
 		return fsock, nil
 	}
+	var fsock *FSock
+	var err error
+	select { // No fsock available in the pool, wait for first one showing up
+	case fsock = <-self.fSocks:
+	case <-self.allowedConns:
+		fsock, err = NewFSock(self.fsAddr, self.fsPasswd, 1, self.eventHandlers, self.eventFilters, self.logger)
+		if err != nil {
+			return nil, err
+		}
+		if self.readEvents {
+			go fsock.ReadEvents() // Read events permanently, errors will be detected on connection returned to the pool
+		}
+		return fsock, nil
+	}
+
+	return fsock, nil
 }
 
 func (self *FSockPool) PushFSock(fsk *FSock) {
 	if fsk.Connected() { // We only add it back if the socket is still connected
 		self.fSocks <- fsk
+	} else {
+		self.allowedConns <- struct{}{}
 	}
 }
 
@@ -402,9 +433,11 @@ func (self *FSockPool) PushFSock(fsk *FSock) {
 func NewFSockPool(maxFSocks int, readEvents bool,
 	fsaddr, fspasswd string, reconnects int, eventHandlers map[string][]func(string), eventFilters map[string]string, l *syslog.Writer) (*FSockPool, error) {
 	pool := &FSockPool{fsAddr: fsaddr, fsPasswd: fspasswd, reconnects: reconnects, eventHandlers: eventHandlers, eventFilters: eventFilters, readEvents: readEvents, logger: l}
-	pool.fSocks = make(chan *FSock, maxFSocks)
+	pool.allowedConns = make(chan struct{}, maxFSocks)
+	var emptyConn struct{}
 	for i := 0; i < maxFSocks; i++ {
-		pool.fSocks <- nil // Empty initiate so we do not need to wait later when we pop
+		pool.allowedConns <- emptyConn // Empty initiate so we do not need to wait later when we pop
 	}
+	pool.fSocks = make(chan *FSock, maxFSocks)
 	return pool, nil
 }
