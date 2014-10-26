@@ -79,8 +79,8 @@ func MapChanData(chanInfoStr string) []map[string]string {
 	if len(spltChanInfo) <= 5 {
 		return chansInfoMap
 	}
-	hdrs := strings.Split(spltChanInfo[2], ",")
-	for _, chanInfoLn := range spltChanInfo[3 : len(spltChanInfo)-3] {
+	hdrs := strings.Split(spltChanInfo[0], ",")
+	for _, chanInfoLn := range spltChanInfo[1 : len(spltChanInfo)-3] {
 		chanInfo := strings.Split(chanInfoLn, ",")
 		if len(hdrs) != len(chanInfo) {
 			continue
