@@ -22,6 +22,47 @@ import (
 	"time"
 )
 
+// Split considering {}[] which cancel separator
+func SplitWithGroups(origStr, sep string) []string {
+	if len(origStr) == 0 {
+		return []string{}
+	} else if len(sep) == 0 {
+		return []string{origStr}
+	}
+	retSplit := make([]string, 0)
+	foundIdxs := make([]int, 0)
+	//var opened string
+	startIdx := 0
+	for {
+		idxFound := strings.Index(origStr[startIdx:], sep)
+		if idxFound == -1 {
+			break
+		} else {
+			idxFound += startIdx
+			foundIdxs = append(foundIdxs, idxFound)
+			startIdx = idxFound + 1 // Skip the character found on next check
+		}
+	}
+	if len(foundIdxs) == 0 {
+		return []string{origStr}
+	}
+	for i := range foundIdxs {
+		switch i {
+		case 0: // First one
+			retSplit = append(retSplit, origStr[:foundIdxs[i]])
+		case len(foundIdxs) - 1: // Last one
+			postpendStr := ""
+			if len(origStr) > foundIdxs[i]+1 { // Our separator is not the last character in the string
+				postpendStr = origStr[foundIdxs[i]+1:]
+			}
+			retSplit = append(retSplit, origStr[foundIdxs[i-1]+1:foundIdxs[i]], postpendStr)
+		default:
+			retSplit = append(retSplit, origStr[foundIdxs[i-1]+1:foundIdxs[i]]) // Discard the separator from end string
+		}
+	}
+	return retSplit
+}
+
 // Extracts value of a header from anywhere in content string
 func headerVal(hdrs, hdr string) string {
 	var hdrSIdx, hdrEIdx int
