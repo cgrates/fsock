@@ -22,43 +22,72 @@ import (
 	"time"
 )
 
+func IndexStringAll(origStr, srchd string) []int {
+	foundIdxs := make([]int, 0)
+	lenSearched := len(srchd)
+	startIdx := 0
+	for {
+		idxFound := strings.Index(origStr[startIdx:], srchd)
+		if idxFound == -1 {
+			break
+		} else {
+			idxFound += startIdx
+			foundIdxs = append(foundIdxs, idxFound)
+			startIdx = idxFound + lenSearched // Skip the characters found on next check
+		}
+	}
+	return foundIdxs
+}
+
 // Split considering {}[] which cancel separator
-func SplitWithGroups(origStr, sep string) []string {
+func SplitIgnoreGroups(origStr, sep string) []string {
 	if len(origStr) == 0 {
 		return []string{}
 	} else if len(sep) == 0 {
 		return []string{origStr}
 	}
 	retSplit := make([]string, 0)
-	foundIdxs := make([]int, 0)
-	//var opened string
-	startIdx := 0
-	for {
-		idxFound := strings.Index(origStr[startIdx:], sep)
-		if idxFound == -1 {
-			break
-		} else {
-			idxFound += startIdx
-			foundIdxs = append(foundIdxs, idxFound)
-			startIdx = idxFound + 1 // Skip the character found on next check
-		}
-	}
-	if len(foundIdxs) == 0 {
+	cmIdxs := IndexStringAll(origStr, ",") // Main indexes of separators
+	if len(cmIdxs) == 0 {
 		return []string{origStr}
 	}
-	for i := range foundIdxs {
+	oCrlyIdxs := IndexStringAll(origStr, "{") // Index  { for exceptions
+	cCrlyIdxs := IndexStringAll(origStr, "}") // Index  } for exceptions closing
+	oBrktIdxs := IndexStringAll(origStr, "[") // Index [ for exceptions
+	cBrktIdxs := IndexStringAll(origStr, "]") // Index ] for exceptions closing
+	lastNonexcludedIdx := 0
+	for i, cmdIdx := range cmIdxs {
+		if len(oCrlyIdxs) == len(cCrlyIdxs) && len(oBrktIdxs) == len(cBrktIdxs) { // We assume exceptions and closing them are symetrical, otherwise don't handle exceptions
+			exceptFound := false
+			for iCrlyIdx := range oCrlyIdxs {
+				if oCrlyIdxs[iCrlyIdx] < cmdIdx && cCrlyIdxs[iCrlyIdx] > cmdIdx { // Parentheses canceling indexing found
+					exceptFound = true
+					break
+				}
+			}
+			for oBrktIdx := range oBrktIdxs {
+				if oBrktIdxs[oBrktIdx] < cmdIdx && cBrktIdxs[oBrktIdx] > cmdIdx { // Parentheses canceling indexing found
+					exceptFound = true
+					break
+				}
+			}
+			if exceptFound {
+				continue
+			}
+		}
 		switch i {
 		case 0: // First one
-			retSplit = append(retSplit, origStr[:foundIdxs[i]])
-		case len(foundIdxs) - 1: // Last one
+			retSplit = append(retSplit, origStr[:cmIdxs[i]])
+		case len(cmIdxs) - 1: // Last one
 			postpendStr := ""
-			if len(origStr) > foundIdxs[i]+1 { // Our separator is not the last character in the string
-				postpendStr = origStr[foundIdxs[i]+1:]
+			if len(origStr) > cmIdxs[i]+1 { // Our separator is not the last character in the string
+				postpendStr = origStr[cmIdxs[i]+1:]
 			}
-			retSplit = append(retSplit, origStr[foundIdxs[i-1]+1:foundIdxs[i]], postpendStr)
+			retSplit = append(retSplit, origStr[cmIdxs[lastNonexcludedIdx]+1:cmIdxs[i]], postpendStr)
 		default:
-			retSplit = append(retSplit, origStr[foundIdxs[i-1]+1:foundIdxs[i]]) // Discard the separator from end string
+			retSplit = append(retSplit, origStr[cmIdxs[lastNonexcludedIdx]+1:cmIdxs[i]]) // Discard the separator from end string
 		}
+		lastNonexcludedIdx = i
 	}
 	return retSplit
 }
@@ -122,7 +151,7 @@ func MapChanData(chanInfoStr string) []map[string]string {
 	}
 	hdrs := strings.Split(spltChanInfo[0], ",")
 	for _, chanInfoLn := range spltChanInfo[1 : len(spltChanInfo)-3] {
-		chanInfo := strings.Split(chanInfoLn, ",")
+		chanInfo := SplitIgnoreGroups(chanInfoLn, ",")
 		if len(hdrs) != len(chanInfo) {
 			continue
 		}

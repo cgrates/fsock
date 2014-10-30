@@ -37,21 +37,37 @@ extra data
 `
 )
 
-func TestSplitWithGroups(t *testing.T) {
+func TestIndexStringAll(t *testing.T) {
+	testStr := "a,b,c"
+	if indxAll := IndexStringAll(testStr, ","); !reflect.DeepEqual([]int{1, 3}, indxAll) {
+		t.Errorf("Expected %+v, received: %+v", []int{1, 3}, indxAll)
+	}
+	testStr = "a,,b,c,,"
+	if indxAll := IndexStringAll(testStr, ",,"); !reflect.DeepEqual([]int{1, 6}, indxAll) {
+		t.Errorf("Expected %+v, received: %+v", []int{1, 6}, indxAll)
+	}
+}
+
+func TestSplitIgnoreGroups(t *testing.T) {
 	strNoGroups := "d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXCHANGE_MEDIA,dan,+4986517174963,172.16.254.66,dan,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,Outbound Call,dan,,ba23506f-e36b-4c12-9c17-9146077bb240,,"
-	if !reflect.DeepEqual(strings.Split(strNoGroups, ","), SplitWithGroups(strNoGroups, ",")) {
-		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), SplitWithGroups(strNoGroups, ","))
+	if !reflect.DeepEqual(strings.Split(strNoGroups, ","), SplitIgnoreGroups(strNoGroups, ",")) {
+		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), SplitIgnoreGroups(strNoGroups, ","))
 	}
 	strNoGroups2 := "d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXCHANGE_MEDIA,dan,+4986517174963,172.16.254.66,dan,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,Outbound Call,dan,,ba23506f-e36b-4c12-9c17-9146077bb240"
-	if !reflect.DeepEqual(strings.Split(strNoGroups2, ","), SplitWithGroups(strNoGroups2, ",")) {
-		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), SplitWithGroups(strNoGroups, ","))
+	if !reflect.DeepEqual(strings.Split(strNoGroups2, ","), SplitIgnoreGroups(strNoGroups2, ",")) {
+		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), SplitIgnoreGroups(strNoGroups, ","))
 	}
 	strNoGroups3 := ",d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXCHANGE_MEDIA,dan,+4986517174963,172.16.254.66,dan,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,Outbound Call,dan,,ba23506f-e36b-4c12-9c17-9146077bb240"
-	if !reflect.DeepEqual(strings.Split(strNoGroups3, ","), SplitWithGroups(strNoGroups3, ",")) {
-		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), SplitWithGroups(strNoGroups, ","))
+	if !reflect.DeepEqual(strings.Split(strNoGroups3, ","), SplitIgnoreGroups(strNoGroups3, ",")) {
+		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), SplitIgnoreGroups(strNoGroups, ","))
 	}
-	//strWithGroups := "ba23506f-e36b-4c12-9c17-9146077bb240,inbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXECUTE,dan,dan,172.16.254.66,+4986517174963,bridge,{sip_contact_user=iPBXSuite}[origination_caller_id_number=+4986517174963,to_domain_tag=172.16.254.66,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=dan,sip_h_X-ForwardedCall=false,presence_id=dan@172.16.254.66,leg_progress_timeout=50,leg_timeout=100,to_ep_type=SIP,to_ep_tag=dan,sip_h_X-CalledDomainTag=172.16.254.66,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/dan@172.16.254.66;fs_path=sip:127.0.0.1,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,,,,ba23506f-e36b-4c12-9c17-9146077bb240,,"
-
+	strWithGroups := "ba23506f-e36b-4c12-9c17-9146077bb240,inbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXECUTE,dan,dan,172.16.254.66,+4986517174963,bridge,{sip_contact_user=iPBXSuite}[origination_caller_id_number=+4986517174963,to_domain_tag=172.16.254.66,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=dan,sip_h_X-ForwardedCall=false,presence_id=dan@172.16.254.66,leg_progress_timeout=50,leg_timeout=100,to_ep_type=SIP,to_ep_tag=dan,sip_h_X-CalledDomainTag=172.16.254.66,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/dan@172.16.254.66;fs_path=sip:127.0.0.1,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,,,,ba23506f-e36b-4c12-9c17-9146077bb240,,"
+	eSplt := []string{"ba23506f-e36b-4c12-9c17-9146077bb240", "inbound", "2014-10-27 10:30:11", "1414402211", "sofia/ipbxas/dan@172.16.254.66", "CS_EXECUTE", "dan", "dan", "172.16.254.66", "+4986517174963", "bridge",
+		"{sip_contact_user=iPBXSuite}[origination_caller_id_number=+4986517174963,to_domain_tag=172.16.254.66,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=dan,sip_h_X-ForwardedCall=false,presence_id=dan@172.16.254.66,leg_progress_timeout=50,leg_timeout=100,to_ep_type=SIP,to_ep_tag=dan,sip_h_X-CalledDomainTag=172.16.254.66,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/dan@172.16.254.66;fs_path=sip:127.0.0.1",
+		"XML", "ipbxas", "PCMA", "8000", "64000", "PCMA", "8000", "64000", "", "iPBXDev", "dan@172.16.254.66", "", "ACTIVE", "", "", "", "ba23506f-e36b-4c12-9c17-9146077bb240", "", ""}
+	if splt := SplitIgnoreGroups(strWithGroups, ","); !reflect.DeepEqual(eSplt, splt) {
+		t.Errorf("Expecting : %+v, received: %v", eSplt, splt)
+	}
 }
 
 func TestHeaders(t *testing.T) {
@@ -204,6 +220,10 @@ d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sof
 4 total.
 `
 	eChanData := []map[string]string{
+		map[string]string{"created_epoch": "1414402211", "application": "bridge", "write_codec": "PCMA", "write_rate": "8000", "presence_data": "", "call_uuid": "ba23506f-e36b-4c12-9c17-9146077bb240", "uuid": "ba23506f-e36b-4c12-9c17-9146077bb240", "cid_num": "dan",
+			"application_data": "{sip_contact_user=iPBXSuite}[origination_caller_id_number=+4986517174963,to_domain_tag=172.16.254.66,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=dan,sip_h_X-ForwardedCall=false,presence_id=dan@172.16.254.66,leg_progress_timeout=50,leg_timeout=100,to_ep_type=SIP,to_ep_tag=dan,sip_h_X-CalledDomainTag=172.16.254.66,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/dan@172.16.254.66;fs_path=sip:127.0.0.1",
+			"created":          "2014-10-27 10:30:11", "dest": "+4986517174963", "direction": "inbound", "state": "CS_EXECUTE", "ip_addr": "172.16.254.66", "cid_name": "dan", "write_bit_rate": "64000", "sent_callee_num": "", "name": "sofia/ipbxas/dan@172.16.254.66", "context": "ipbxas", "read_rate": "8000",
+			"read_bit_rate": "64000", "presence_id": "dan@172.16.254.66", "callee_name": "", "callee_direction": "", "dialplan": "XML", "read_codec": "PCMA", "secure": "", "hostname": "iPBXDev", "callstate": "ACTIVE", "callee_num": "", "sent_callee_name": ""},
 		map[string]string{"state": "CS_EXCHANGE_MEDIA", "dialplan": "XML", "read_codec": "PCMA", "secure": "", "hostname": "iPBXDev", "callstate": "ACTIVE", "callee_num": "dan", "write_codec": "PCMA", "write_bit_rate": "64000",
 			"call_uuid": "ba23506f-e36b-4c12-9c17-9146077bb240", "context": "ipbxas", "read_rate": "8000", "read_bit_rate": "64000", "presence_id": "dan@172.16.254.66", "created": "2014-10-27 10:30:11", "dest": "dan", "callee_name": "Outbound Call",
 			"callee_direction": "", "direction": "outbound", "ip_addr": "172.16.254.66", "sent_callee_name": "", "created_epoch": "1414402211", "cid_name": "dan", "application": "", "write_rate": "8000", "presence_data": "", "sent_callee_num": "",
