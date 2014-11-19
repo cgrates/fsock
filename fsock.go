@@ -495,7 +495,7 @@ func (self *FSockPool) PopFSock() (*FSock, error) {
 	select { // No fsock available in the pool, wait for first one showing up
 	case fsock = <-self.fSocks:
 	case <-self.allowedConns:
-		fsock, err = NewFSock(self.fsAddr, self.fsPasswd, 1, self.eventHandlers, self.eventFilters, self.logger)
+		fsock, err = NewFSock(self.fsAddr, self.fsPasswd, self.reconnects, self.eventHandlers, self.eventFilters, self.logger)
 		if err != nil {
 			return nil, err
 		}
