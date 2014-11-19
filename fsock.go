@@ -16,13 +16,14 @@ import (
 	"log/syslog"
 	"net"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
 
-func IndexStringAll(origStr, srchd string) []int {
+func indexStringAll(origStr, srchd string) []int {
 	foundIdxs := make([]int, 0)
 	lenSearched := len(srchd)
 	startIdx := 0
@@ -40,21 +41,21 @@ func IndexStringAll(origStr, srchd string) []int {
 }
 
 // Split considering {}[] which cancel separator
-func SplitIgnoreGroups(origStr, sep string) []string {
+func splitIgnoreGroups(origStr, sep string) []string {
 	if len(origStr) == 0 {
 		return []string{}
 	} else if len(sep) == 0 {
 		return []string{origStr}
 	}
 	retSplit := make([]string, 0)
-	cmIdxs := IndexStringAll(origStr, ",") // Main indexes of separators
+	cmIdxs := indexStringAll(origStr, ",") // Main indexes of separators
 	if len(cmIdxs) == 0 {
 		return []string{origStr}
 	}
-	oCrlyIdxs := IndexStringAll(origStr, "{") // Index  { for exceptions
-	cCrlyIdxs := IndexStringAll(origStr, "}") // Index  } for exceptions closing
-	oBrktIdxs := IndexStringAll(origStr, "[") // Index [ for exceptions
-	cBrktIdxs := IndexStringAll(origStr, "]") // Index ] for exceptions closing
+	oCrlyIdxs := indexStringAll(origStr, "{") // Index  { for exceptions
+	cCrlyIdxs := indexStringAll(origStr, "}") // Index  } for exceptions closing
+	oBrktIdxs := indexStringAll(origStr, "[") // Index [ for exceptions
+	cBrktIdxs := indexStringAll(origStr, "]") // Index ] for exceptions closing
 	lastNonexcludedIdx := 0
 	for i, cmdIdx := range cmIdxs {
 		if len(oCrlyIdxs) == len(cCrlyIdxs) && len(oBrktIdxs) == len(cBrktIdxs) { // We assume exceptions and closing them are symetrical, otherwise don't handle exceptions
@@ -88,6 +89,22 @@ func SplitIgnoreGroups(origStr, sep string) []string {
 			retSplit = append(retSplit, origStr[cmIdxs[lastNonexcludedIdx]+1:cmIdxs[i]]) // Discard the separator from end string
 		}
 		lastNonexcludedIdx = i
+	}
+	// Merge more consecutive groups (this is how FS displays app data)
+	for idx, spltData := range retSplit {
+		if idx == 0 {
+			continue // Nothing to do for first data
+		}
+		isGroup, _ := regexp.MatchString("{.*}|[.*]", spltData)
+		if !isGroup {
+			continue
+		}
+		isPrevGroup, _ := regexp.MatchString("{.*}|[.*]", retSplit[idx-1])
+		if !isPrevGroup {
+			continue
+		}
+		retSplit[idx-1] = retSplit[idx-1] + sep + spltData                              // Merge it with the previous data
+		retSplit[idx], retSplit = retSplit[len(retSplit)-1], retSplit[:len(retSplit)-1] // Remove itself from the list
 	}
 	return retSplit
 }
@@ -151,7 +168,7 @@ func MapChanData(chanInfoStr string) []map[string]string {
 	}
 	hdrs := strings.Split(spltChanInfo[0], ",")
 	for _, chanInfoLn := range spltChanInfo[1 : len(spltChanInfo)-3] {
-		chanInfo := SplitIgnoreGroups(chanInfoLn, ",")
+		chanInfo := splitIgnoreGroups(chanInfoLn, ",")
 		if len(hdrs) != len(chanInfo) {
 			continue
 		}

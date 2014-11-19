@@ -37,35 +37,42 @@ extra data
 `
 )
 
-func TestIndexStringAll(t *testing.T) {
+func TestindexStringAll(t *testing.T) {
 	testStr := "a,b,c"
-	if indxAll := IndexStringAll(testStr, ","); !reflect.DeepEqual([]int{1, 3}, indxAll) {
+	if indxAll := indexStringAll(testStr, ","); !reflect.DeepEqual([]int{1, 3}, indxAll) {
 		t.Errorf("Expected %+v, received: %+v", []int{1, 3}, indxAll)
 	}
 	testStr = "a,,b,c,,"
-	if indxAll := IndexStringAll(testStr, ",,"); !reflect.DeepEqual([]int{1, 6}, indxAll) {
+	if indxAll := indexStringAll(testStr, ",,"); !reflect.DeepEqual([]int{1, 6}, indxAll) {
 		t.Errorf("Expected %+v, received: %+v", []int{1, 6}, indxAll)
 	}
 }
 
-func TestSplitIgnoreGroups(t *testing.T) {
+func TestsplitIgnoreGroups(t *testing.T) {
 	strNoGroups := "d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXCHANGE_MEDIA,dan,+4986517174963,172.16.254.66,dan,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,Outbound Call,dan,,ba23506f-e36b-4c12-9c17-9146077bb240,,"
-	if !reflect.DeepEqual(strings.Split(strNoGroups, ","), SplitIgnoreGroups(strNoGroups, ",")) {
-		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), SplitIgnoreGroups(strNoGroups, ","))
+	if !reflect.DeepEqual(strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ",")) {
+		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ","))
 	}
 	strNoGroups2 := "d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXCHANGE_MEDIA,dan,+4986517174963,172.16.254.66,dan,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,Outbound Call,dan,,ba23506f-e36b-4c12-9c17-9146077bb240"
-	if !reflect.DeepEqual(strings.Split(strNoGroups2, ","), SplitIgnoreGroups(strNoGroups2, ",")) {
-		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), SplitIgnoreGroups(strNoGroups, ","))
+	if !reflect.DeepEqual(strings.Split(strNoGroups2, ","), splitIgnoreGroups(strNoGroups2, ",")) {
+		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ","))
 	}
 	strNoGroups3 := ",d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXCHANGE_MEDIA,dan,+4986517174963,172.16.254.66,dan,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,Outbound Call,dan,,ba23506f-e36b-4c12-9c17-9146077bb240"
-	if !reflect.DeepEqual(strings.Split(strNoGroups3, ","), SplitIgnoreGroups(strNoGroups3, ",")) {
-		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), SplitIgnoreGroups(strNoGroups, ","))
+	if !reflect.DeepEqual(strings.Split(strNoGroups3, ","), splitIgnoreGroups(strNoGroups3, ",")) {
+		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ","))
 	}
 	strWithGroups := "ba23506f-e36b-4c12-9c17-9146077bb240,inbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXECUTE,dan,dan,172.16.254.66,+4986517174963,bridge,{sip_contact_user=iPBXSuite}[origination_caller_id_number=+4986517174963,to_domain_tag=172.16.254.66,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=dan,sip_h_X-ForwardedCall=false,presence_id=dan@172.16.254.66,leg_progress_timeout=50,leg_timeout=100,to_ep_type=SIP,to_ep_tag=dan,sip_h_X-CalledDomainTag=172.16.254.66,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/dan@172.16.254.66;fs_path=sip:127.0.0.1,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,,,,ba23506f-e36b-4c12-9c17-9146077bb240,,"
 	eSplt := []string{"ba23506f-e36b-4c12-9c17-9146077bb240", "inbound", "2014-10-27 10:30:11", "1414402211", "sofia/ipbxas/dan@172.16.254.66", "CS_EXECUTE", "dan", "dan", "172.16.254.66", "+4986517174963", "bridge",
 		"{sip_contact_user=iPBXSuite}[origination_caller_id_number=+4986517174963,to_domain_tag=172.16.254.66,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=dan,sip_h_X-ForwardedCall=false,presence_id=dan@172.16.254.66,leg_progress_timeout=50,leg_timeout=100,to_ep_type=SIP,to_ep_tag=dan,sip_h_X-CalledDomainTag=172.16.254.66,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/dan@172.16.254.66;fs_path=sip:127.0.0.1",
 		"XML", "ipbxas", "PCMA", "8000", "64000", "PCMA", "8000", "64000", "", "iPBXDev", "dan@172.16.254.66", "", "ACTIVE", "", "", "", "ba23506f-e36b-4c12-9c17-9146077bb240", "", ""}
-	if splt := SplitIgnoreGroups(strWithGroups, ","); !reflect.DeepEqual(eSplt, splt) {
+	if splt := splitIgnoreGroups(strWithGroups, ","); !reflect.DeepEqual(eSplt, splt) {
+		t.Errorf("Expecting : %+v, received: %v", eSplt, splt)
+	}
+	strWithGroups = "8009b347-fe46-4c99-9bb8-89e52e05d35f,inbound,2014-11-19 12:05:13,1416395113,sofia/ipbxas/+4986517174963@1.2.3.4,CS_EXECUTE,004986517174963,+4986517174963,2.3.4.5,0049850210795,bridge,{sip_contact_user=CloudIPBX.com,bridge_early_media=true}[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user3,sip_h_X-ForwardedCall=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user3,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-Billable=false,max_forwards=50]sofia/ipbxas/user3@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp,[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user4,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user4,max_forwards=50]sofia/ipbxas/user4@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,nl-asd-dev-sbc01,+4986517174963@1.2.3.4,,ACTIVE,,,,8009b347-fe46-4c99-9bb8-89e52e05d35f,,,004986517174963,+4986517174963,2.3.4.5,0049850210795,XML,ipbxas"
+	eSplt = []string{"8009b347-fe46-4c99-9bb8-89e52e05d35f", "inbound", "2014-11-19 12:05:13", "1416395113", "sofia/ipbxas/+4986517174963@1.2.3.4", "CS_EXECUTE", "004986517174963", "+4986517174963", "2.3.4.5", "0049850210795", "bridge",
+		"{sip_contact_user=CloudIPBX.com,bridge_early_media=true}[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user3,sip_h_X-ForwardedCall=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user3,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-Billable=false,max_forwards=50]sofia/ipbxas/user3@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp,[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user4,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user4,max_forwards=50]sofia/ipbxas/user4@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp",
+		"XML", "ipbxas", "PCMA", "8000", "64000", "PCMA", "8000", "64000", "", "nl-asd-dev-sbc01", "+4986517174963@1.2.3.4", "", "ACTIVE", "", "", "", "8009b347-fe46-4c99-9bb8-89e52e05d35f", "", "", "004986517174963", "+4986517174963", "2.3.4.5", "0049850210795", "XML", "ipbxas"}
+	if splt := splitIgnoreGroups(strWithGroups, ","); !reflect.DeepEqual(eSplt, splt) {
 		t.Errorf("Expecting : %+v, received: %v", eSplt, splt)
 	}
 }
@@ -240,10 +247,40 @@ d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sof
 	if rcvChanData := MapChanData(chanInfoStr); !reflect.DeepEqual(eChanData, rcvChanData) {
 		t.Errorf("Expected: %+v, received: %+v", eChanData, rcvChanData)
 	}
-	/*if rcvChanData := MapChanData(chanInfoStr); len(rcvChanData) != 4 {
-		t.Errorf("Unexpected channel map received: %+v", rcvChanData)
+}
+
+func TestMapChanData3(t *testing.T) {
+	chanInfoStr := `uuid,direction,created,created_epoch,name,state,cid_name,cid_num,ip_addr,dest,application,application_data,dialplan,context,read_codec,read_rate,read_bit_rate,write_codec,write_rate,write_bit_rate,secure,hostname,presence_id,presence_data,callstate,callee_name,callee_num,callee_direction,call_uuid,sent_callee_name,sent_callee_num,initial_cid_name,initial_cid_num,initial_ip_addr,initial_dest,initial_dialplan,initial_context
+8009b347-fe46-4c99-9bb8-89e52e05d35f,inbound,2014-11-19 12:05:13,1416395113,sofia/ipbxas/+4986517174963@1.2.3.4,CS_EXECUTE,004986517174963,+4986517174963,2.3.4.5,0049850210795,bridge,{sip_contact_user=CloudIPBX.com,bridge_early_media=true}[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user3,sip_h_X-ForwardedCall=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user3,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-Billable=false,max_forwards=50]sofia/ipbxas/user3@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp,[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user4,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user4,max_forwards=50]sofia/ipbxas/user4@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,nl-asd-dev-sbc01,+4986517174963@1.2.3.4,,ACTIVE,,,,8009b347-fe46-4c99-9bb8-89e52e05d35f,,,004986517174963,+4986517174963,2.3.4.5,0049850210795,XML,ipbxas
+91f198d3-3e4d-4885-b2f7-fd58865fa9a5,outbound,2014-11-19 12:05:13,1416395113,sofia/ipbxas/user3@sip.test.cloudipbx.com,CS_EXCHANGE_MEDIA,004986517174963,+4986517174963,2.3.4.5,user3,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,nl-asd-dev-sbc01,,,ACTIVE,Outbound Call,user3,,8009b347-fe46-4c99-9bb8-89e52e05d35f,,,004986517174963,+4986517174963,2.3.4.5,user3,XML,ipbxas
+e657365d-c51b-4487-85f8-188c0771664e,inbound,2014-11-19 12:05:13,1416395113,sofia/loop_ipbxas/+4986517174963@2.3.4.5,CS_EXECUTE,004986517174963,+4986517174963,192.168.50.136,user3,bridge,[sip_h_X-EpTransport=tls]sofia/ipbxas/user3@10.10.10.142:40268;alias=87.139.12.167~40268~3;registering_acc=sip_test_deanconnect_nl;fs_path=sip:2.3.4.5;transport=tcp,XML,redirected,PCMA,8000,64000,PCMA,8000,64000,,nl-asd-dev-sbc01,,,ACTIVE,Outbound Call,user3,SEND,e657365d-c51b-4487-85f8-188c0771664e,Outbound Call,user3,004986517174963,+4986517174963,192.168.50.136,user3,XML,ipbxas_lo
+2a7efd05-6f6f-400e-b319-4b8ff6a77a80,outbound,2014-11-19 12:05:13,1416395113,sofia/ipbxas/user3@10.10.10.142:40268,CS_EXCHANGE_MEDIA,004986517174963,+4986517174963,192.168.50.136,user3,,,XML,redirected,PCMA,8000,64000,PCMA,8000,64000,,nl-asd-dev-sbc01,,,ACTIVE,Outbound Call,user3,SEND,e657365d-c51b-4487-85f8-188c0771664e,004986517174963,+4986517174963,004986517174963,+4986517174963,192.168.50.136,user3,XML,redirected
+
+4 total.
+`
+	eChanData := []map[string]string{
+		map[string]string{"created_epoch": "1416395113", "dest": "0049850210795", "write_codec": "64000", "presence_data": "+4986517174963@1.2.3.4", "callee_direction": "", "sent_callee_num": "", "initial_dialplan": "0049850210795", "uuid": "8009b347-fe46-4c99-9bb8-89e52e05d35f", "state": "CS_EXECUTE",
+			"ip_addr": "2.3.4.5", "cid_name": "004986517174963", "write_rate": "PCMA", "write_bit_rate": "8000", "callee_name": "ACTIVE", "initial_context": "XML", "context": "XML", "read_codec": "ipbxas", "read_rate": "PCMA", "secure": "64000", "presence_id": "nl-asd-dev-sbc01",
+			"sent_callee_name": "8009b347-fe46-4c99-9bb8-89e52e05d35f", "initial_dest": "2.3.4.5", "application": "bridge", "call_uuid": "", "initial_ip_addr": "+4986517174963", "direction": "inbound", "name": "sofia/ipbxas/+4986517174963@1.2.3.4",
+			"application_data": "{sip_contact_user=CloudIPBX.com,bridge_early_media=true}[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user3,sip_h_X-ForwardedCall=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user3,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-Billable=false,max_forwards=50]sofia/ipbxas/user3@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp,[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user4,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user4,max_forwards=50]sofia/ipbxas/user4@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp",
+			"callstate":        "", "initial_cid_name": "", "created": "2014-11-19 12:05:13", "initial_cid_num": "004986517174963", "cid_num": "+4986517174963", "dialplan": "ipbxas", "read_bit_rate": "8000", "hostname": "", "callee_num": ""},
+		map[string]string{"direction": "outbound", "sent_callee_name": "", "application": "", "secure": "", "callstate": "ACTIVE", "call_uuid": "8009b347-fe46-4c99-9bb8-89e52e05d35f", "initial_dialplan": "XML", "name": "sofia/ipbxas/user3@sip.test.cloudipbx.com", "ip_addr": "2.3.4.5",
+			"context": "ipbxas", "read_codec": "PCMA", "callee_num": "user3", "initial_cid_name": "004986517174963", "initial_dest": "user3", "uuid": "91f198d3-3e4d-4885-b2f7-fd58865fa9a5", "cid_num": "+4986517174963", "dest": "user3", "dialplan": "XML", "read_rate": "8000", "write_rate": "8000",
+			"write_bit_rate": "64000", "presence_id": "", "created": "2014-11-19 12:05:13", "cid_name": "004986517174963", "presence_data": "", "callee_name": "Outbound Call", "initial_cid_num": "+4986517174963", "initial_context": "ipbxas", "state": "CS_EXCHANGE_MEDIA", "callee_direction": "",
+			"created_epoch": "1416395113", "application_data": "", "read_bit_rate": "64000", "write_codec": "PCMA", "hostname": "nl-asd-dev-sbc01", "sent_callee_num": "", "initial_ip_addr": "2.3.4.5"},
+		map[string]string{"dialplan": "XML", "write_codec": "PCMA", "presence_id": "", "callee_direction": "SEND", "created": "2014-11-19 12:05:13", "read_rate": "8000", "secure": "", "sent_callee_name": "Outbound Call", "initial_ip_addr": "192.168.50.136", "name": "sofia/loop_ipbxas/+4986517174963@2.3.4.5",
+			"context": "redirected", "write_bit_rate": "64000", "cid_name": "004986517174963", "presence_data": "", "callstate": "ACTIVE", "callee_name": "Outbound Call", "initial_dest": "user3", "direction": "inbound", "cid_num": "+4986517174963",
+			"application_data": "[sip_h_X-EpTransport=tls]sofia/ipbxas/user3@10.10.10.142:40268;alias=87.139.12.167~40268~3;registering_acc=sip_test_deanconnect_nl;fs_path=sip:2.3.4.5;transport=tcp", "read_bit_rate": "64000", "hostname": "nl-asd-dev-sbc01", "callee_num": "user3", "call_uuid": "e657365d-c51b-4487-85f8-188c0771664e",
+			"initial_context": "ipbxas_lo", "state": "CS_EXECUTE", "dest": "user3", "read_codec": "PCMA", "write_rate": "8000", "initial_cid_name": "004986517174963", "uuid": "e657365d-c51b-4487-85f8-188c0771664e", "created_epoch": "1416395113", "ip_addr": "192.168.50.136", "application": "bridge",
+			"sent_callee_num": "user3", "initial_cid_num": "+4986517174963", "initial_dialplan": "XML"},
+		map[string]string{"created_epoch": "1416395113", "cid_num": "+4986517174963", "application": "", "read_bit_rate": "64000", "callee_num": "user3", "initial_ip_addr": "192.168.50.136", "initial_dest": "user3", "name": "sofia/ipbxas/user3@10.10.10.142:40268", "ip_addr": "192.168.50.136",
+			"application_data": "", "write_codec": "PCMA", "write_bit_rate": "64000", "presence_data": "", "callstate": "ACTIVE", "call_uuid": "e657365d-c51b-4487-85f8-188c0771664e", "sent_callee_name": "004986517174963", "direction": "outbound", "cid_name": "004986517174963", "write_rate": "8000",
+			"uuid": "2a7efd05-6f6f-400e-b319-4b8ff6a77a80", "context": "redirected", "callee_direction": "SEND", "state": "CS_EXCHANGE_MEDIA", "dest": "user3", "sent_callee_num": "+4986517174963", "created": "2014-11-19 12:05:13", "dialplan": "XML", "read_codec": "PCMA", "initial_cid_num": "+4986517174963",
+			"read_rate": "8000", "secure": "", "hostname": "nl-asd-dev-sbc01", "presence_id": "", "initial_cid_name": "004986517174963", "callee_name": "Outbound Call", "initial_dialplan": "XML", "initial_context": "redirected"},
 	}
-	*/
+	if rcvChanData := MapChanData(chanInfoStr); !reflect.DeepEqual(eChanData, rcvChanData) {
+		t.Errorf("Expected: %+v, received: %+v", eChanData, rcvChanData)
+	}
 }
 
 /*********************** Benchmarks ************************/
