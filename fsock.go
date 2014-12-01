@@ -41,6 +41,7 @@ func indexStringAll(origStr, srchd string) []int {
 }
 
 // Split considering {}[] which cancel separator
+// In the end we merge groups which are having consecutive [] or {} in beginning since this is how FS builts them
 func splitIgnoreGroups(origStr, sep string) []string {
 	if len(origStr) == 0 {
 		return []string{}
@@ -90,23 +91,26 @@ func splitIgnoreGroups(origStr, sep string) []string {
 		}
 		lastNonexcludedIdx = i
 	}
-	// Merge more consecutive groups (this is how FS displays app data)
+	groupedSplt := make([]string, 0)
+	// Merge more consecutive groups (this is how FS displays app data from dial strings)
 	for idx, spltData := range retSplit {
 		if idx == 0 {
+			groupedSplt = append(groupedSplt, spltData)
 			continue // Nothing to do for first data
 		}
 		isGroup, _ := regexp.MatchString("{.*}|[.*]", spltData)
 		if !isGroup {
+			groupedSplt = append(groupedSplt, spltData)
 			continue
 		}
 		isPrevGroup, _ := regexp.MatchString("{.*}|[.*]", retSplit[idx-1])
 		if !isPrevGroup {
+			groupedSplt = append(groupedSplt, spltData)
 			continue
 		}
-		retSplit[idx-1] = retSplit[idx-1] + sep + spltData                              // Merge it with the previous data
-		retSplit[idx], retSplit = retSplit[len(retSplit)-1], retSplit[:len(retSplit)-1] // Remove itself from the list
+		groupedSplt[len(groupedSplt)-1] = groupedSplt[len(groupedSplt)-1] + sep + spltData // Merge it with the previous data
 	}
-	return retSplit
+	return groupedSplt
 }
 
 // Extracts value of a header from anywhere in content string
