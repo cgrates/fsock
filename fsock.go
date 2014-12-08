@@ -444,6 +444,13 @@ func (self *FSock) ReadEvents() {
 	return
 }
 
+func (self *FSock) LocalAddr() net.Addr {
+	if !self.Connected() {
+		return nil
+	}
+	return self.conn.LocalAddr()
+}
+
 // Dispatch events to handlers in async mode
 func (self *FSock) dispatchEvent(event string) {
 	eventName := headerVal(event, "Event-Name")
