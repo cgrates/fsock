@@ -497,6 +497,9 @@ type FSockPool struct {
 }
 
 func (self *FSockPool) PopFSock() (*FSock, error) {
+	if self == nil {
+		return nil, errors.New("UNCONFIGURED_FS_POOL")
+	}
 	if len(self.fSocks) != 0 { // Select directly if available, so we avoid randomness of selection
 		fsock := <-self.fSocks
 		return fsock, nil
@@ -515,16 +518,17 @@ func (self *FSockPool) PopFSock() (*FSock, error) {
 		}
 		return fsock, nil
 	}
-
 	return fsock, nil
 }
 
 func (self *FSockPool) PushFSock(fsk *FSock) {
-	if fsk.Connected() { // We only add it back if the socket is still connected
-		self.fSocks <- fsk
-	} else {
+	if self == nil {
+		return
+	}
+	if fsk == nil || !fsk.Connected() {
 		self.allowedConns <- struct{}{}
 	}
+	self.fSocks <- fsk
 }
 
 // Instantiates a new FSockPool
