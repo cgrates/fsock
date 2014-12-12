@@ -331,7 +331,6 @@ func (self *FSock) filterEvents(filters map[string]string) error {
 	if len(filters) == 0 { //Nothing to filter
 		return nil
 	}
-
 	for hdr, val := range filters {
 		cmd := "filter " + hdr + " " + val + "\n\n"
 		fmt.Fprint(self.conn, cmd)
@@ -384,10 +383,20 @@ func (self *FSock) Connect() error {
 	return conErr
 }
 
+func (self *FSock) ConnectIfNeeded() error {
+	if !self.Connected() {
+		return self.Connect()
+	}
+	if !self.Connected() {
+		return errors.New("Not connected to FS")
+	}
+	return nil
+}
+
 // Send API command
 func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
-	if !self.Connected() {
-		return "", errors.New("Not connected to FS")
+	if err := self.ConnectIfNeeded(); err != nil {
+		return "", err
 	}
 	cmd := fmt.Sprintf("api %s\n\n", cmdStr)
 	fmt.Fprint(self.conn, cmd)
@@ -400,11 +409,11 @@ func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
 
 // SendMessage command
 func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
+	if err := self.ConnectIfNeeded(); err != nil {
+		return err
+	}
 	if len(cmdargs) == 0 {
 		return errors.New("Need command arguments")
-	}
-	if !self.Connected() {
-		return errors.New("Not connected to FS")
 	}
 	argStr := ""
 	for k, v := range cmdargs {
@@ -522,11 +531,12 @@ func (self *FSockPool) PopFSock() (*FSock, error) {
 }
 
 func (self *FSockPool) PushFSock(fsk *FSock) {
-	if self == nil {
+	if self == nil { // Did not initialize the pool
 		return
 	}
 	if fsk == nil || !fsk.Connected() {
 		self.allowedConns <- struct{}{}
+		return
 	}
 	self.fSocks <- fsk
 }
