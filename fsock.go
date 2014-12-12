@@ -402,7 +402,7 @@ func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
 	fmt.Fprint(self.conn, cmd)
 	resEvent := <-self.apiChan
 	if strings.Contains(resEvent, "-ERR") {
-		return "", errors.New("Command failed")
+		return "", errors.New(strings.TrimSpace(resEvent))
 	}
 	return resEvent, nil
 }
@@ -422,7 +422,7 @@ func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
 	fmt.Fprint(self.conn, fmt.Sprintf("sendmsg %s\n%s\n", uuid, argStr))
 	replyTxt := <-self.cmdChan
 	if strings.HasPrefix(replyTxt, "-ERR") {
-		return fmt.Errorf("SendMessage: %s", replyTxt)
+		return errors.New(strings.TrimSpace(replyTxt))
 	}
 	return nil
 }
