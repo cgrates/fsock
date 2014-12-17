@@ -42,10 +42,7 @@ func main() {
     fs, err := fsock.NewFSock("127.0.0.1:8021", "ClueCon", 10, evHandlers, evFilters, l)
     if err != nil {
         l.Crit(fmt.Sprintf("FreeSWITCH error:", err))
-	return
-    } else if !fs.Connected() {
-	l.Warning("Cannot connect to FreeSWITCH")
-        return
+	   return
     }
     fs.ReadEvents()
 }

@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"log/syslog"
 	"net"
 	"net/url"
@@ -206,13 +207,16 @@ type FSock struct {
 	apiChan, cmdChan   chan string
 	reconnects         int
 	delayFunc          func() int
+	stopReadEvents     chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
+	errReadEvents      chan error
 	logger             *syslog.Writer
 }
 
 // Reads headers until delimiter reached
-func (self *FSock) readHeaders() (s string, err error) {
+func (self *FSock) readHeaders() (string, error) {
 	bytesRead := make([]byte, 0)
 	var readLine []byte
+	var err error
 	for {
 		readLine, err = self.buffer.ReadBytes('\n')
 		if err != nil {
@@ -220,7 +224,7 @@ func (self *FSock) readHeaders() (s string, err error) {
 				self.logger.Err(fmt.Sprintf("<FSock> Error reading headers: <%s>", err.Error()))
 			}
 			self.Disconnect()
-			return
+			return "", err
 		}
 		// No Error, add received to localread buffer
 		if len(bytes.TrimSpace(readLine)) == 0 {
@@ -268,6 +272,33 @@ func (self *FSock) readEvent() (string, string, error) {
 		return "", "", err
 	}
 	return hdrs, body, nil
+}
+
+// Read events from network buffer, stop when exitChan is closed, report on errReadEvents on error and exit
+// Receive exitChan and errReadEvents as parameters so we avoid concurrency on using self.
+func (self *FSock) readEvents(exitChan chan struct{}, errReadEvents chan error) {
+	for {
+		select {
+		case <-exitChan:
+			return
+		default: // Unlock waiting here
+		}
+		hdr, body, err := self.readEvent()
+		if err != nil {
+			if self.logger != nil {
+				self.logger.Err(fmt.Sprintf("<FSock> Error reading events: <%s>", err.Error()))
+			}
+			errReadEvents <- err
+			return //ToDo: communicate with  ReadEvents via a channel, to give up listening on errors
+		}
+		if strings.Contains(hdr, "api/response") {
+			self.apiChan <- body
+		} else if strings.Contains(hdr, "command/reply") {
+			self.cmdChan <- headerVal(hdr, "Reply-Text")
+		} else if body != "" { // We got a body, could be event, try dispatching it
+			self.dispatchEvent(body)
+		}
+	}
 }
 
 // Checks if socket connected. Can be extended with pings
@@ -349,53 +380,68 @@ func (self *FSock) Connect() error {
 	if self.Connected() {
 		self.Disconnect()
 	}
-	var conErr error
-	for i := 0; i < self.reconnects; i++ {
-		self.conn, conErr = net.Dial("tcp", self.fsaddress)
-		if conErr == nil {
-			if self.logger != nil {
-				self.logger.Info("<FSock> Successfully connected to FreeSWITCH!")
-			}
-			// Connected, init buffer, auth and subscribe to desired events and filters
-			self.buffer = bufio.NewReaderSize(self.conn, 8192) // reinit buffer
-			if authChg, err := self.readHeaders(); err != nil || !strings.Contains(authChg, "auth/request") {
-				return errors.New("No auth challenge received")
-			} else if errAuth := self.auth(); errAuth != nil { // Auth did not succeed
-				return errAuth
-			}
-			// Subscribe to events handled by event handlers
-			handledEvs := make([]string, len(self.eventHandlers))
-			j := 0
-			for k := range self.eventHandlers {
-				handledEvs[j] = k
-				j++
-			}
-			if subscribeErr := self.eventsPlain(handledEvs); subscribeErr != nil {
-				return subscribeErr
-			}
-			if filterErr := self.filterEvents(self.eventFilters); filterErr != nil {
-				return filterErr
-			}
-			return nil
-		}
-		time.Sleep(time.Duration(self.delayFunc()) * time.Second)
+	if self.stopReadEvents != nil { // ToDo: Check if the channel is not already closed
+		close(self.stopReadEvents) // we have read events already processing, request stop
+		self.stopReadEvents = nil
 	}
-	return conErr
+	var err error
+	if self.conn, err = net.Dial("tcp", self.fsaddress); err != nil {
+		return err
+	}
+	if self.logger != nil {
+		self.logger.Info("<FSock> Successfully connected to FreeSWITCH!")
+	}
+	// Connected, init buffer, auth and subscribe to desired events and filters
+	self.buffer = bufio.NewReaderSize(self.conn, 8192) // reinit buffer
+	if authChg, err := self.readHeaders(); err != nil || !strings.Contains(authChg, "auth/request") {
+		return errors.New("No auth challenge received")
+	} else if errAuth := self.auth(); errAuth != nil { // Auth did not succeed
+		return errAuth
+	}
+	// Subscribe to events handled by event handlers
+	handledEvs := make([]string, len(self.eventHandlers))
+	j := 0
+	for k := range self.eventHandlers {
+		handledEvs[j] = k
+		j++
+	}
+	if subscribeErr := self.eventsPlain(handledEvs); subscribeErr != nil {
+		return subscribeErr
+	}
+	if filterErr := self.filterEvents(self.eventFilters); filterErr != nil {
+		return filterErr
+	}
+	// Reinit readEvents channels so we avoid concurrency issues between goroutines
+	self.stopReadEvents = make(chan struct{})
+	self.errReadEvents = make(chan error)
+	go self.readEvents(self.stopReadEvents, self.errReadEvents) // Fork read events in it's own goroutine
+	//time.Sleep(time.Duration(self.delayFunc()) * time.Second)
+	return nil
 }
 
-func (self *FSock) ConnectIfNeeded() error {
-	if !self.Connected() {
-		return self.Connect()
+// If not connected, attempt reconnect if allowed
+func (self *FSock) ReconnectIfNeeded() error {
+	if self.Connected() { // No need to reconnect
+		return nil
 	}
-	if !self.Connected() {
-		return errors.New("Not connected to FS")
+	if self.reconnects == 0 { // No reconnects allowed
+		return errors.New("Not connected to FreeSWITCH")
 	}
-	return nil
+	var err error
+	for i := 0; i < self.reconnects; i++ {
+		if err = self.Connect(); err == nil || self.Connected() {
+			fmt.Printf("Reconnect error, index: %d, err: %v, connected: %t\n", i, err, self.Connected())
+			break // No error or unrelated to connection
+		}
+		fmt.Printf("Reconnect, index: %d, err: %v, connected: %t\n", i, err, self.Connected())
+		time.Sleep(time.Duration(i) * time.Second)
+	}
+	return err // nil or last error in the loop
 }
 
 // Send API command
 func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
-	if err := self.ConnectIfNeeded(); err != nil {
+	if err := self.ReconnectIfNeeded(); err != nil {
 		return "", err
 	}
 	cmd := fmt.Sprintf("api %s\n\n", cmdStr)
@@ -409,7 +455,7 @@ func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
 
 // SendMessage command
 func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
-	if err := self.ConnectIfNeeded(); err != nil {
+	if err := self.ReconnectIfNeeded(); err != nil {
 		return err
 	}
 	if len(cmdargs) == 0 {
@@ -427,30 +473,16 @@ func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
 	return nil
 }
 
-// Reads events from socket
-func (self *FSock) ReadEvents() {
-	// Read events from buffer, firing them up further
+// Reads events from socket, attempt reconnect if disconnected
+func (self *FSock) ReadEvents() (err error) {
 	for {
-		hdr, body, err := self.readEvent()
-		if err != nil {
-			if self.logger != nil {
-				self.logger.Err(fmt.Sprintf("<FSock> Error reading events: <%s>", err.Error()))
+		if err = <-self.errReadEvents; err == io.EOF { // Disconnected, try reconnect
+			if err = self.ReconnectIfNeeded(); err != nil {
+				break
 			}
-			connErr := self.Connect()
-			if connErr != nil {
-				return
-			}
-			continue // Connection reset
-		}
-		if strings.Contains(hdr, "api/response") {
-			self.apiChan <- body
-		} else if strings.Contains(hdr, "command/reply") {
-			self.cmdChan <- headerVal(hdr, "Reply-Text")
-		} else if body != "" { // We got a body, could be event, try dispatching it
-			self.dispatchEvent(body)
 		}
 	}
-	return
+	return err
 }
 
 func (self *FSock) LocalAddr() net.Addr {
@@ -499,7 +531,6 @@ type FSockPool struct {
 	reconnects       int
 	eventHandlers    map[string][]func(string)
 	eventFilters     map[string]string
-	readEvents       bool // Fork reading events when creating the socket
 	logger           *syslog.Writer
 	allowedConns     chan struct{} // Will be populated with members allowed
 	fSocks           chan *FSock   // Keep here reference towards the list of opened sockets
@@ -522,9 +553,6 @@ func (self *FSockPool) PopFSock() (*FSock, error) {
 		if err != nil {
 			return nil, err
 		}
-		if self.readEvents {
-			go fsock.ReadEvents() // Read events permanently, errors will be detected on connection returned to the pool
-		}
 		return fsock, nil
 	}
 	return fsock, nil
@@ -542,9 +570,9 @@ func (self *FSockPool) PushFSock(fsk *FSock) {
 }
 
 // Instantiates a new FSockPool
-func NewFSockPool(maxFSocks int, readEvents bool,
-	fsaddr, fspasswd string, reconnects int, eventHandlers map[string][]func(string), eventFilters map[string]string, l *syslog.Writer) (*FSockPool, error) {
-	pool := &FSockPool{fsAddr: fsaddr, fsPasswd: fspasswd, reconnects: reconnects, eventHandlers: eventHandlers, eventFilters: eventFilters, readEvents: readEvents, logger: l}
+func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int,
+	eventHandlers map[string][]func(string), eventFilters map[string]string, l *syslog.Writer) (*FSockPool, error) {
+	pool := &FSockPool{fsAddr: fsaddr, fsPasswd: fspasswd, reconnects: reconnects, eventHandlers: eventHandlers, eventFilters: eventFilters, logger: l}
 	pool.allowedConns = make(chan struct{}, maxFSocks)
 	var emptyConn struct{}
 	for i := 0; i < maxFSocks; i++ {
