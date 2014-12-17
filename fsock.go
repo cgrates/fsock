@@ -301,26 +301,6 @@ func (self *FSock) readEvents(exitChan chan struct{}, errReadEvents chan error) 
 	}
 }
 
-// Checks if socket connected. Can be extended with pings
-func (self *FSock) Connected() bool {
-	if self.conn == nil {
-		return false
-	}
-	return true
-}
-
-// Disconnects from socket
-func (self *FSock) Disconnect() (err error) {
-	if self.conn != nil {
-		if self.logger != nil {
-			self.logger.Info("<FSock> Disconnecting from FreeSWITCH!")
-		}
-		err = self.conn.Close()
-		self.conn = nil
-	}
-	return
-}
-
 // Auth to FS
 func (self *FSock) auth() error {
 	authCmd := fmt.Sprintf("auth %s\n\n", self.fspaswd)
@@ -373,6 +353,46 @@ func (self *FSock) filterEvents(filters map[string]string) error {
 	}
 
 	return nil
+}
+
+// Dispatch events to handlers in async mode
+func (self *FSock) dispatchEvent(event string) {
+	eventName := headerVal(event, "Event-Name")
+	handleNames := []string{eventName, "ALL"}
+	dispatched := false
+	for _, handleName := range handleNames {
+		if _, hasHandlers := self.eventHandlers[handleName]; hasHandlers {
+			// We have handlers, dispatch to all of them
+			for _, handlerFunc := range self.eventHandlers[handleName] {
+				go handlerFunc(event)
+				dispatched = true
+				return
+			}
+		}
+	}
+	if !dispatched && self.logger != nil {
+		self.logger.Warning(fmt.Sprintf("<FSock> No dispatcher for event: <%+v>", event))
+	}
+}
+
+// Checks if socket connected. Can be extended with pings
+func (self *FSock) Connected() bool {
+	if self.conn == nil {
+		return false
+	}
+	return true
+}
+
+// Disconnects from socket
+func (self *FSock) Disconnect() (err error) {
+	if self.conn != nil {
+		if self.logger != nil {
+			self.logger.Info("<FSock> Disconnecting from FreeSWITCH!")
+		}
+		err = self.conn.Close()
+		self.conn = nil
+	}
+	return
 }
 
 // Connect or reconnect
@@ -433,8 +453,7 @@ func (self *FSock) ReconnectIfNeeded() error {
 			fmt.Printf("Reconnect error, index: %d, err: %v, connected: %t\n", i, err, self.Connected())
 			break // No error or unrelated to connection
 		}
-		fmt.Printf("Reconnect, index: %d, err: %v, connected: %t\n", i, err, self.Connected())
-		time.Sleep(time.Duration(i) * time.Second)
+		time.Sleep(time.Duration(self.delayFunc()) * time.Second)
 	}
 	return err // nil or last error in the loop
 }
@@ -490,26 +509,6 @@ func (self *FSock) LocalAddr() net.Addr {
 		return nil
 	}
 	return self.conn.LocalAddr()
-}
-
-// Dispatch events to handlers in async mode
-func (self *FSock) dispatchEvent(event string) {
-	eventName := headerVal(event, "Event-Name")
-	handleNames := []string{eventName, "ALL"}
-	dispatched := false
-	for _, handleName := range handleNames {
-		if _, hasHandlers := self.eventHandlers[handleName]; hasHandlers {
-			// We have handlers, dispatch to all of them
-			for _, handlerFunc := range self.eventHandlers[handleName] {
-				go handlerFunc(event)
-				dispatched = true
-				return
-			}
-		}
-	}
-	if !dispatched && self.logger != nil {
-		self.logger.Warning(fmt.Sprintf("<FSock> No dispatcher for event: <%+v>", event))
-	}
 }
 
 // Connects to FS and starts buffering input
