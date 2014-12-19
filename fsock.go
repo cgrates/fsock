@@ -285,11 +285,8 @@ func (self *FSock) readEvents(exitChan chan struct{}, errReadEvents chan error) 
 		}
 		hdr, body, err := self.readEvent()
 		if err != nil {
-			if self.logger != nil {
-				self.logger.Err(fmt.Sprintf("<FSock> Error reading events: <%s>", err.Error()))
-			}
 			errReadEvents <- err
-			return //ToDo: communicate with  ReadEvents via a channel, to give up listening on errors
+			return
 		}
 		if strings.Contains(hdr, "api/response") {
 			self.apiChan <- body
@@ -432,10 +429,10 @@ func (self *FSock) Connect() error {
 		return filterErr
 	}
 	// Reinit readEvents channels so we avoid concurrency issues between goroutines
-	self.stopReadEvents = make(chan struct{})
+	stopReadEvents := make(chan struct{})
+	self.stopReadEvents = stopReadEvents
 	self.errReadEvents = make(chan error)
-	go self.readEvents(self.stopReadEvents, self.errReadEvents) // Fork read events in it's own goroutine
-	//time.Sleep(time.Duration(self.delayFunc()) * time.Second)
+	go self.readEvents(stopReadEvents, self.errReadEvents) // Fork read events in it's own goroutine
 	return nil
 }
 
@@ -450,7 +447,6 @@ func (self *FSock) ReconnectIfNeeded() error {
 	var err error
 	for i := 0; i < self.reconnects; i++ {
 		if err = self.Connect(); err == nil || self.Connected() {
-			fmt.Printf("Reconnect error, index: %d, err: %v, connected: %t\n", i, err, self.Connected())
 			break // No error or unrelated to connection
 		}
 		time.Sleep(time.Duration(self.delayFunc()) * time.Second)
