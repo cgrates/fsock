@@ -445,15 +445,15 @@ func (self *FSock) ReconnectIfNeeded() error {
 	if self.Connected() { // No need to reconnect
 		return nil
 	}
-	if self.reconnects == 0 { // No reconnects allowed
-		return errors.New("Not connected to FreeSWITCH")
-	}
 	var err error
 	for i := 0; i < self.reconnects; i++ {
 		if err = self.Connect(); err == nil || self.Connected() {
 			break // No error or unrelated to connection
 		}
 		time.Sleep(time.Duration(self.delayFunc()) * time.Second)
+	}
+	if err == nil && !self.Connected() {
+		return errors.New("Not connected to FreeSWITCH")
 	}
 	return err // nil or last error in the loop
 }
