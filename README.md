@@ -22,10 +22,10 @@ import (
 )
 
 // Formats the event as map and prints it out
-func printHeartbeat( eventStr string ) {
+func printHeartbeat( eventStr, connId string ) {
     // Format the event from string into Go's map type
     eventMap := fsock.FSEventStrToMap(eventStr, []string{})
-    fmt.Printf("%v",eventMap)
+    fmt.Printf("%v, connId: %s",eventMap, connId)
 }
 
 func main() {
@@ -38,8 +38,8 @@ func main() {
     // No filters
     evFilters := map[string]string{}
     // We are interested in heartbeats, define handler for them
-    evHandlers := map[string][]func(string){"HEARTBEAT": []func(string){printHeartbeat}}
-    fs, err := fsock.NewFSock("127.0.0.1:8021", "ClueCon", 10, evHandlers, evFilters, l)
+    evHandlers := map[string][]func(string, string){"HEARTBEAT": []func(string, string){printHeartbeat}}
+    fs, err := fsock.NewFSock("127.0.0.1:8021", "ClueCon", 10, evHandlers, evFilters, l, "wetsfnmretiewrtpj")
     if err != nil {
         l.Crit(fmt.Sprintf("FreeSWITCH error:", err))
 	   return
