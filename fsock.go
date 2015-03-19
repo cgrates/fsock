@@ -356,6 +356,12 @@ func (self *FSock) filterEvents(filters map[string]string) error {
 // Dispatch events to handlers in async mode
 func (self *FSock) dispatchEvent(event string) {
 	eventName := headerVal(event, "Event-Name")
+	if eventName == "CUSTOM" {
+		eventSubclass := headerVal(event, "Event-Subclass")
+		if len(eventSubclass) != 0 {
+			eventName += " " + urlDecode(eventSubclass)
+		}
+	}
 	handleNames := []string{eventName, "ALL"}
 	dispatched := false
 	for _, handleName := range handleNames {
@@ -369,6 +375,7 @@ func (self *FSock) dispatchEvent(event string) {
 		}
 	}
 	if !dispatched && self.logger != nil {
+		fmt.Printf("No dispatcher, event name: %s, handlers: %+v\n", eventName, self.eventHandlers)
 		self.logger.Warning(fmt.Sprintf("<FSock> No dispatcher for event: <%+v>", event))
 	}
 }
