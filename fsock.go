@@ -317,12 +317,20 @@ func (self *FSock) eventsPlain(events []string) error {
 		return nil
 	}
 	eventsCmd := "event plain"
+	customEvents := ""
 	for _, ev := range events {
 		if ev == "ALL" {
 			eventsCmd = "event plain all"
 			break
 		}
+		if strings.HasPrefix(ev, "CUSTOM") {
+                        customEvents += ev[6:] // will capture here also space between CUSTOM and event
+                        continue
+                }
 		eventsCmd += " " + ev
+	}
+	if len(customEvents) != 0 && eventsCmd != "event plain all" { // Add CUSTOM events subscribing in the end otherwise unexpected events are received
+		eventsCmd += " " + "CUSTOM" + customEvents
 	}
 	eventsCmd += "\n\n"
 	fmt.Fprint(self.conn, eventsCmd)
