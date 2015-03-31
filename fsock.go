@@ -324,9 +324,9 @@ func (self *FSock) eventsPlain(events []string) error {
 			break
 		}
 		if strings.HasPrefix(ev, "CUSTOM") {
-                        customEvents += ev[6:] // will capture here also space between CUSTOM and event
-                        continue
-                }
+			customEvents += ev[6:] // will capture here also space between CUSTOM and event
+			continue
+		}
 		eventsCmd += " " + ev
 	}
 	if len(customEvents) != 0 && eventsCmd != "event plain all" { // Add CUSTOM events subscribing in the end otherwise unexpected events are received
@@ -461,11 +461,17 @@ func (self *FSock) ReconnectIfNeeded() error {
 		return nil
 	}
 	var err error
-	for i := 0; i < self.reconnects; i++ {
+	i := 0
+	for {
+		if i != -1 && i >= self.reconnects { // Maximum reconnects reached, -1 for infinite reconnects
+			break
+		}
 		if err = self.Connect(); err == nil || self.Connected() {
-			break // No error or unrelated to connection
+			self.delayFunc = fib() // Reset the reconnect delay
+			break                  // No error or unrelated to connection
 		}
 		time.Sleep(time.Duration(self.delayFunc()) * time.Second)
+		i++
 	}
 	if err == nil && !self.Connected() {
 		return errors.New("Not connected to FreeSWITCH")
