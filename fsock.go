@@ -486,7 +486,7 @@ func (self *FSock) SendCmd(cmdStr string) (string, error) {
 	}
 	cmd := fmt.Sprintf(cmdStr)
 	fmt.Fprint(self.conn, cmd)
-	resEvent := <-self.apiChan
+	resEvent := <-self.cmdChan
 	if strings.Contains(resEvent, "-ERR") {
 		return "", errors.New(strings.TrimSpace(resEvent))
 	}
