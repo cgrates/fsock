@@ -22,7 +22,14 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"sync"
 )
+
+var connMutex *sync.Mutex
+
+func init() {
+	connMutex = &sync.Mutex{}
+}
 
 func indexStringAll(origStr, srchd string) []int {
 	foundIdxs := make([]int, 0)
@@ -390,6 +397,8 @@ func (self *FSock) dispatchEvent(event string) {
 
 // Checks if socket connected. Can be extended with pings
 func (self *FSock) Connected() bool {
+	connMutex.Lock()
+	defer connMutex.Unlock()
 	if self.conn == nil {
 		return false
 	}
@@ -398,6 +407,8 @@ func (self *FSock) Connected() bool {
 
 // Disconnects from socket
 func (self *FSock) Disconnect() (err error) {
+	connMutex.Lock()
+	defer connMutex.Unlock()
 	if self.conn != nil {
 		if self.logger != nil {
 			self.logger.Info("<FSock> Disconnecting from FreeSWITCH!")
@@ -463,7 +474,7 @@ func (self *FSock) ReconnectIfNeeded() error {
 	var err error
 	i := 0
 	for {
-		if i != -1 && i >= self.reconnects { // Maximum reconnects reached, -1 for infinite reconnects
+		if self.reconnects != -1 && i >= self.reconnects { // Maximum reconnects reached, -1 for infinite reconnects
 			break
 		}
 		if err = self.Connect(); err == nil || self.Connected() {
