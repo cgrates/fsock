@@ -479,6 +479,20 @@ func (self *FSock) ReconnectIfNeeded() error {
 	return err // nil or last error in the loop
 }
 
+// Generic proxy for commands
+func (self *FSock) SendCmd(cmdStr string) (string, error) {
+	if err := self.ReconnectIfNeeded(); err != nil {
+		return "", err
+	}
+	cmd := fmt.Sprintf(cmdStr)
+	fmt.Fprint(self.conn, cmd)
+	resEvent := <-self.apiChan
+	if strings.Contains(resEvent, "-ERR") {
+		return "", errors.New(strings.TrimSpace(resEvent))
+	}
+	return resEvent, nil
+}
+
 // Send API command
 func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
 	if err := self.ReconnectIfNeeded(); err != nil {
