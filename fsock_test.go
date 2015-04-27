@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -91,6 +92,7 @@ func TestHeaders(t *testing.T) {
 		t.Error("Error creating pype!")
 	}
 	FS = &FSock{}
+	FS.connMutex = new(sync.RWMutex)
 	FS.buffer = bufio.NewReader(r)
 	w.Write([]byte(HEADER))
 	h, err := FS.readHeaders()
@@ -105,6 +107,7 @@ func TestEvent(t *testing.T) {
 		t.Error("Error creating pype!")
 	}
 	FS = &FSock{}
+	FS.connMutex = new(sync.RWMutex)
 	FS.buffer = bufio.NewReader(r)
 	w.Write([]byte(HEADER + BODY))
 	h, b, err := FS.readEvent()
@@ -164,6 +167,7 @@ func TestReadEvents(t *testing.T) {
 		t.Error("Error creating pipe!")
 	}
 	FS = &FSock{}
+	FS.connMutex = new(sync.RWMutex)
 	FS.buffer = bufio.NewReader(r)
 	var events int32
 	FS.eventHandlers = map[string][]func(string, string){

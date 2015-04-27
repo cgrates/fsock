@@ -21,15 +21,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"sync"
+	"time"
 )
-
-var connMutex *sync.Mutex
-
-func init() {
-	connMutex = &sync.Mutex{}
-}
 
 func indexStringAll(origStr, srchd string) []int {
 	foundIdxs := make([]int, 0)
@@ -207,6 +201,7 @@ var FS *FSock // Used to share FS connection via package globals
 // Connection to FreeSWITCH Socket
 type FSock struct {
 	conn               net.Conn
+	connMutex          *sync.RWMutex
 	connId             string // Indetifier for the component using this instance of FSock, optional
 	buffer             *bufio.Reader
 	fsaddress, fspaswd string
@@ -309,7 +304,9 @@ func (self *FSock) readEvents(exitChan chan struct{}, errReadEvents chan error) 
 // Auth to FS
 func (self *FSock) auth() error {
 	authCmd := fmt.Sprintf("auth %s\n\n", self.fspaswd)
+	self.connMutex.RLock()
 	fmt.Fprint(self.conn, authCmd)
+	self.connMutex.RUnlock()
 	if rply, err := self.readHeaders(); err != nil {
 		return err
 	} else if !strings.Contains(rply, "Reply-Text: +OK accepted") {
@@ -340,7 +337,9 @@ func (self *FSock) eventsPlain(events []string) error {
 		eventsCmd += " " + "CUSTOM" + customEvents
 	}
 	eventsCmd += "\n\n"
+	self.connMutex.RLock()
 	fmt.Fprint(self.conn, eventsCmd)
+	self.connMutex.RUnlock()
 	if rply, err := self.readHeaders(); err != nil {
 		return err
 	} else if !strings.Contains(rply, "Reply-Text: +OK") {
@@ -357,7 +356,9 @@ func (self *FSock) filterEvents(filters map[string]string) error {
 	}
 	for hdr, val := range filters {
 		cmd := "filter " + hdr + " " + val + "\n\n"
+		self.connMutex.RLock()
 		fmt.Fprint(self.conn, cmd)
+		self.connMutex.RUnlock()
 		if rply, err := self.readHeaders(); err != nil {
 			return err
 		} else if !strings.Contains(rply, "Reply-Text: +OK") {
@@ -397,8 +398,8 @@ func (self *FSock) dispatchEvent(event string) {
 
 // Checks if socket connected. Can be extended with pings
 func (self *FSock) Connected() bool {
-	connMutex.Lock()
-	defer connMutex.Unlock()
+	self.connMutex.RLock()
+	defer self.connMutex.RUnlock()
 	if self.conn == nil {
 		return false
 	}
@@ -407,8 +408,8 @@ func (self *FSock) Connected() bool {
 
 // Disconnects from socket
 func (self *FSock) Disconnect() (err error) {
-	connMutex.Lock()
-	defer connMutex.Unlock()
+	self.connMutex.Lock()
+	defer self.connMutex.Unlock()
 	if self.conn != nil {
 		if self.logger != nil {
 			self.logger.Info("<FSock> Disconnecting from FreeSWITCH!")
@@ -428,18 +429,23 @@ func (self *FSock) Connect() error {
 		close(self.stopReadEvents) // we have read events already processing, request stop
 		self.stopReadEvents = nil
 	}
-	var err error
-	if self.conn, err = net.Dial("tcp", self.fsaddress); err != nil {
+	conn, err := net.Dial("tcp", self.fsaddress)
+	if err != nil {
 		if self.logger != nil {
 			self.logger.Err(fmt.Sprintf("<FSock> Attempt to connect to FreeSWITCH, received: %s", err.Error()))
 		}
 		return err
 	}
+	self.connMutex.Lock()
+	self.conn = conn
+	self.connMutex.Unlock()
 	if self.logger != nil {
 		self.logger.Info("<FSock> Successfully connected to FreeSWITCH!")
 	}
 	// Connected, init buffer, auth and subscribe to desired events and filters
+	self.connMutex.RLock()
 	self.buffer = bufio.NewReaderSize(self.conn, 8192) // reinit buffer
+	self.connMutex.RUnlock()
 	if authChg, err := self.readHeaders(); err != nil || !strings.Contains(authChg, "auth/request") {
 		return errors.New("No auth challenge received")
 	} else if errAuth := self.auth(); errAuth != nil { // Auth did not succeed
@@ -496,7 +502,9 @@ func (self *FSock) SendCmd(cmdStr string) (string, error) {
 		return "", err
 	}
 	cmd := fmt.Sprintf(cmdStr)
+	self.connMutex.RLock()
 	fmt.Fprint(self.conn, cmd)
+	self.connMutex.RUnlock()
 	resEvent := <-self.cmdChan
 	if strings.Contains(resEvent, "-ERR") {
 		return "", errors.New(strings.TrimSpace(resEvent))
@@ -510,7 +518,9 @@ func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
 		return "", err
 	}
 	cmd := fmt.Sprintf("api %s\n\n", cmdStr)
+	self.connMutex.RLock()
 	fmt.Fprint(self.conn, cmd)
+	self.connMutex.RUnlock()
 	resEvent := <-self.apiChan
 	if strings.Contains(resEvent, "-ERR") {
 		return "", errors.New(strings.TrimSpace(resEvent))
@@ -530,7 +540,9 @@ func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
 	for k, v := range cmdargs {
 		argStr += fmt.Sprintf("%s:%s\n", k, v)
 	}
+	self.connMutex.RLock()
 	fmt.Fprint(self.conn, fmt.Sprintf("sendmsg %s\n%s\n", uuid, argStr))
+	self.connMutex.RUnlock()
 	replyTxt := <-self.cmdChan
 	if strings.HasPrefix(replyTxt, "-ERR") {
 		return errors.New(strings.TrimSpace(replyTxt))
@@ -559,10 +571,8 @@ func (self *FSock) LocalAddr() net.Addr {
 
 // Connects to FS and starts buffering input
 func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string, string), eventFilters map[string]string, l *syslog.Writer, connId string) (*FSock, error) {
-	fsock := FSock{connId: connId, fsaddress: fsaddr, fspaswd: fspaswd, eventHandlers: eventHandlers, eventFilters: eventFilters, reconnects: reconnects, logger: l}
-	fsock.apiChan = make(chan string) // Init apichan so we can use it to pass api replies
-	fsock.cmdChan = make(chan string)
-	fsock.delayFunc = fib()
+	fsock := FSock{connMutex: new(sync.RWMutex), connId: connId, fsaddress: fsaddr, fspaswd: fspaswd, eventHandlers: eventHandlers, eventFilters: eventFilters, reconnects: reconnects,
+		logger: l, apiChan: make(chan string), cmdChan: make(chan string), delayFunc: fib()}
 	errConn := fsock.Connect()
 	if errConn != nil {
 		return nil, errConn
