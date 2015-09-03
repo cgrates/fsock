@@ -385,9 +385,8 @@ func (self *FSock) dispatchEvent(event string) {
 			// We have handlers, dispatch to all of them
 			for _, handlerFunc := range self.eventHandlers[handleName] {
 				go handlerFunc(event, self.connId)
-				dispatched = true
-				return
 			}
+			dispatched = true
 		}
 	}
 	if !dispatched && self.logger != nil {
