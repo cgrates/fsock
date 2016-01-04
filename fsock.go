@@ -579,6 +579,8 @@ func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][
 	return &fsock, nil
 }
 
+var ErrConnectionTimeout = errors.New("ConnectionPool timeout")
+
 // Connection handler for commands sent to FreeSWITCH
 type FSockPool struct {
 	connId, fsAddr, fsPasswd string
@@ -588,11 +590,12 @@ type FSockPool struct {
 	logger                   *syslog.Writer
 	allowedConns             chan struct{} // Will be populated with members allowed
 	fSocks                   chan *FSock   // Keep here reference towards the list of opened sockets
+	maxWaitConn              time.Duration // Maximum duration to wait for a connection to be returned by Pop
 }
 
 func (self *FSockPool) PopFSock() (*FSock, error) {
 	if self == nil {
-		return nil, errors.New("UNCONFIGURED_FS_POOL")
+		return nil, errors.New("Unconfigured ConnectionPool")
 	}
 	if len(self.fSocks) != 0 { // Select directly if available, so we avoid randomness of selection
 		fsock := <-self.fSocks
@@ -608,6 +611,8 @@ func (self *FSockPool) PopFSock() (*FSock, error) {
 			return nil, err
 		}
 		return fsock, nil
+	case <-time.After(self.maxWaitConn):
+		return nil, ErrConnectionTimeout
 	}
 	return fsock, nil
 }
@@ -624,9 +629,10 @@ func (self *FSockPool) PushFSock(fsk *FSock) {
 }
 
 // Instantiates a new FSockPool
-func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int,
+func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
 	eventHandlers map[string][]func(string, string), eventFilters map[string]string, l *syslog.Writer, connId string) (*FSockPool, error) {
-	pool := &FSockPool{connId: connId, fsAddr: fsaddr, fsPasswd: fspasswd, reconnects: reconnects, eventHandlers: eventHandlers, eventFilters: eventFilters, logger: l}
+	pool := &FSockPool{connId: connId, fsAddr: fsaddr, fsPasswd: fspasswd, reconnects: reconnects, maxWaitConn: maxWaitConn,
+		eventHandlers: eventHandlers, eventFilters: eventFilters, logger: l}
 	pool.allowedConns = make(chan struct{}, maxFSocks)
 	var emptyConn struct{}
 	for i := 0; i < maxFSocks; i++ {
