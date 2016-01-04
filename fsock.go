@@ -612,7 +612,7 @@ func (self *FSockPool) PopFSock() (*FSock, error) {
 		}
 		return fsock, nil
 	case <-time.After(self.maxWaitConn):
-		return nil, ErrConnectionTimeout
+		return nil, ErrConnectionPoolTimeout
 	}
 	return fsock, nil
 }
