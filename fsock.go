@@ -169,7 +169,7 @@ func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 func MapChanData(chanInfoStr string) []map[string]string {
 	chansInfoMap := make([]map[string]string, 0)
 	spltChanInfo := strings.Split(chanInfoStr, "\n")
-	if len(spltChanInfo) < 5 {
+	if len(spltChanInfo) <= 5 {
 		return chansInfoMap
 	}
 	hdrs := strings.Split(spltChanInfo[0], ",")
@@ -579,7 +579,7 @@ func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][
 	return &fsock, nil
 }
 
-var ErrConnectionTimeout = errors.New("ConnectionPool timeout")
+var ErrConnectionPoolTimeout = errors.New("ConnectionPool timeout")
 
 // Connection handler for commands sent to FreeSWITCH
 type FSockPool struct {
