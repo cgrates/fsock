@@ -549,6 +549,30 @@ func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
 	return nil
 }
 
+// SendEvent command
+func (self *FSock) SendEvent(eventSubclass string, eventParams map[string]string) (string, error) {
+	if err := self.ReconnectIfNeeded(); err != nil {
+		return "", err
+	}
+
+	// Event-Name is overrided to CUSTOM by FreeSWITCH,
+	// so we use Event-Subclass instead
+	eventParams["Event-Subclass"] = eventSubclass
+	cmd := fmt.Sprintf("sendevent %s\n", eventSubclass)
+	for k, v := range eventParams {
+		cmd += fmt.Sprintf("%s: %s\n", k, v)
+	}
+
+	self.connMutex.RLock()
+	fmt.Fprint(self.conn, fmt.Sprintf("%s\n", cmd))
+	self.connMutex.RUnlock()
+	resEvent := <-self.cmdChan
+	if strings.Contains(resEvent, "-ERR") {
+		return "", errors.New(strings.TrimSpace(resEvent))
+	}
+	return resEvent, nil
+}
+
 // Reads events from socket, attempt reconnect if disconnected
 func (self *FSock) ReadEvents() (err error) {
 	for {
