@@ -1,4 +1,4 @@
-# FreeSWITCH socket client written in [Go](http://cgrates.org/ "Go Website")#
+# FreeSWITCH socket client written in [Go](http://cgrates.org/ "Go Website")
 
 ## Installation ##
 
