@@ -206,7 +206,7 @@ type FSock struct {
 	buffer             *bufio.Reader
 	fsaddress, fspaswd string
 	eventHandlers      map[string][]func(string, string) // eventStr, connId
-	eventFilters       map[string]string
+	eventFilters       map[string][]string
 	apiChan, cmdChan   chan string
 	reconnects         int
 	delayFunc          func() int
@@ -350,22 +350,23 @@ func (self *FSock) eventsPlain(events []string) error {
 }
 
 // Enable filters
-func (self *FSock) filterEvents(filters map[string]string) error {
+func (self *FSock) filterEvents(filters map[string][]string) error {
 	if len(filters) == 0 { //Nothing to filter
 		return nil
 	}
-	for hdr, val := range filters {
-		cmd := "filter " + hdr + " " + val + "\n\n"
-		self.connMutex.RLock()
-		fmt.Fprint(self.conn, cmd)
-		self.connMutex.RUnlock()
-		if rply, err := self.readHeaders(); err != nil {
-			return err
-		} else if !strings.Contains(rply, "Reply-Text: +OK") {
-			return fmt.Errorf("Unexpected filter-events reply received: <%s>", rply)
+	for hdr, vals := range filters {
+		for _, val := range vals {
+			cmd := "filter " + hdr + " " + val + "\n\n"
+			self.connMutex.RLock()
+			fmt.Fprint(self.conn, cmd)
+			self.connMutex.RUnlock()
+			if rply, err := self.readHeaders(); err != nil {
+				return err
+			} else if !strings.Contains(rply, "Reply-Text: +OK") {
+				return fmt.Errorf("Unexpected filter-events reply received: <%s>", rply)
+			}
 		}
 	}
-
 	return nil
 }
 
@@ -593,7 +594,7 @@ func (self *FSock) LocalAddr() net.Addr {
 }
 
 // Connects to FS and starts buffering input
-func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string, string), eventFilters map[string]string, l *syslog.Writer, connId string) (*FSock, error) {
+func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string, string), eventFilters map[string][]string, l *syslog.Writer, connId string) (*FSock, error) {
 	fsock := FSock{connMutex: new(sync.RWMutex), connId: connId, fsaddress: fsaddr, fspaswd: fspaswd, eventHandlers: eventHandlers, eventFilters: eventFilters, reconnects: reconnects,
 		logger: l, apiChan: make(chan string), cmdChan: make(chan string), delayFunc: fib()}
 	errConn := fsock.Connect()
@@ -610,7 +611,7 @@ type FSockPool struct {
 	connId, fsAddr, fsPasswd string
 	reconnects               int
 	eventHandlers            map[string][]func(string, string)
-	eventFilters             map[string]string
+	eventFilters             map[string][]string
 	logger                   *syslog.Writer
 	allowedConns             chan struct{} // Will be populated with members allowed
 	fSocks                   chan *FSock   // Keep here reference towards the list of opened sockets
@@ -654,7 +655,7 @@ func (self *FSockPool) PushFSock(fsk *FSock) {
 
 // Instantiates a new FSockPool
 func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
-	eventHandlers map[string][]func(string, string), eventFilters map[string]string, l *syslog.Writer, connId string) (*FSockPool, error) {
+	eventHandlers map[string][]func(string, string), eventFilters map[string][]string, l *syslog.Writer, connId string) (*FSockPool, error) {
 	pool := &FSockPool{connId: connId, fsAddr: fsaddr, fsPasswd: fspasswd, reconnects: reconnects, maxWaitConn: maxWaitConn,
 		eventHandlers: eventHandlers, eventFilters: eventFilters, logger: l}
 	pool.allowedConns = make(chan struct{}, maxFSocks)
