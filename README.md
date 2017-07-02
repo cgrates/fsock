@@ -48,5 +48,5 @@ func main() {
 }
 ```
 
-[![Build Status](https://drone.io/github.com/cgrates/fsock/status.png)](https://drone.io/github.com/cgrates/fsock/latest)
+[![Build Status](https://secure.travis-ci.org/cgrates/fsock.png)](http://travis-ci.org/cgrates/fsock)
 
