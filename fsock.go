@@ -501,7 +501,7 @@ func (self *FSock) SendCmd(cmdStr string) (string, error) {
 	if err := self.ReconnectIfNeeded(); err != nil {
 		return "", err
 	}
-	cmd := fmt.Sprintf(cmdStr)
+	cmd := fmt.Sprintf("%s\n\n", cmdStr)
 	self.connMutex.RLock()
 	fmt.Fprint(self.conn, cmd)
 	self.connMutex.RUnlock()
