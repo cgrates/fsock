@@ -169,7 +169,7 @@ func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 func MapChanData(chanInfoStr string) []map[string]string {
 	chansInfoMap := make([]map[string]string, 0)
 	spltChanInfo := strings.Split(chanInfoStr, "\n")
-	if len(spltChanInfo) < 3 {
+	if len(spltChanInfo) <= 4 {
 		return chansInfoMap
 	}
 	hdrs := strings.Split(spltChanInfo[0], ",")
