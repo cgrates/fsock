@@ -186,7 +186,7 @@ func TestReadEvents(t *testing.T) {
 		"CHANNEL_UNPARK":           []func(string, string){func(string, string) { events++ }},
 		"CHANNEL_DESTROY":          []func(string, string){func(string, string) { events++ }},
 	}
-	go FS.readEvents(make(chan struct{}), make(chan error))
+	go FS.readEvents()
 	w.Write(data)
 	time.Sleep(50 * time.Millisecond)
 	if events != 45 {

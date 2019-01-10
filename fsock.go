@@ -11,9 +11,11 @@ package fsock
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"log/syslog"
 	"net"
 	"net/url"
@@ -24,6 +26,19 @@ import (
 	"sync"
 	"time"
 )
+
+// helper function for uuid generation
+func genUUID() string {
+	b := make([]byte, 16)
+	_, err := io.ReadFull(rand.Reader, b)
+	if err != nil {
+		log.Fatal(err)
+	}
+	b[6] = (b[6] & 0x0F) | 0x40
+	b[8] = (b[8] &^ 0x40) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10],
+		b[10:])
+}
 
 func indexStringAll(origStr, srchd string) []int {
 	foundIdxs := make([]int, 0)
@@ -141,19 +156,14 @@ func urlDecode(hdrVal string) string {
 // Binary string search in slice
 func isSliceMember(ss []string, s string) bool {
 	sort.Strings(ss)
-	if i := sort.SearchStrings(ss, s); i < len(ss) && ss[i] == s {
-		return true
-	}
-	return false
+	i := sort.SearchStrings(ss, s)
+	return (i < len(ss) && ss[i] == s)
 }
 
 // Convert fseventStr into fseventMap
 func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 	fsevent := make(map[string]string)
-	filtered := false
-	if len(headers) != 0 {
-		filtered = true
-	}
+	filtered := (len(headers) != 0)
 	for _, strLn := range strings.Split(fsevstr, "\n") {
 		if hdrVal := strings.SplitN(strLn, ": ", 2); len(hdrVal) == 2 {
 			if filtered && isSliceMember(headers, hdrVal[0]) {
@@ -166,11 +176,11 @@ func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 }
 
 // Converts string received from fsock into a list of channel info, each represented in a map
-func MapChanData(chanInfoStr string) []map[string]string {
-	chansInfoMap := make([]map[string]string, 0)
+func MapChanData(chanInfoStr string) (chansInfoMap []map[string]string) {
+	chansInfoMap = make([]map[string]string, 0)
 	spltChanInfo := strings.Split(chanInfoStr, "\n")
 	if len(spltChanInfo) <= 4 {
-		return chansInfoMap
+		return
 	}
 	hdrs := strings.Split(spltChanInfo[0], ",")
 	for _, chanInfoLn := range spltChanInfo[1 : len(spltChanInfo)-3] {
@@ -184,7 +194,26 @@ func MapChanData(chanInfoStr string) []map[string]string {
 		}
 		chansInfoMap = append(chansInfoMap, chnMp)
 	}
-	return chansInfoMap
+	return
+}
+
+func EventToMap(event string) (result map[string]string) {
+	result = make(map[string]string, 0)
+	body := false
+	for _, line := range strings.Split(event, "\n") {
+		if len(line) == 0 {
+			body = true
+		}
+		if body {
+			result["EvBody"] = result["EvBody"] + "\n" + line
+			continue
+		}
+		if val := strings.SplitN(line, ": ", 2); len(val) == 2 {
+			result[val[0]] = val[1]
+		}
+
+	}
+	return
 }
 
 // successive Fibonacci numbers.
@@ -212,14 +241,15 @@ type FSock struct {
 	delayFunc          func() int
 	stopReadEvents     chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
 	errReadEvents      chan error
+	backgroundChans    map[string]chan string
 	logger             *syslog.Writer
 }
 
 // Reads headers until delimiter reached
-func (self *FSock) readHeaders() (string, error) {
+func (self *FSock) readHeaders() (header string, err error) {
 	bytesRead := make([]byte, 0)
 	var readLine []byte
-	var err error
+
 	for {
 		readLine, err = self.buffer.ReadBytes('\n')
 		if err != nil {
@@ -239,56 +269,61 @@ func (self *FSock) readHeaders() (string, error) {
 }
 
 // Reads the body from buffer, ln is given by content-length of headers
-func (self *FSock) readBody(ln int) (string, error) {
-	bytesRead := make([]byte, ln)
-	for i := 0; i < ln; i++ {
-		if readByte, err := self.buffer.ReadByte(); err != nil {
+func (self *FSock) readBody(noBytes int) (body string, err error) {
+	bytesRead := make([]byte, noBytes)
+	var readByte byte
+
+	for i := 0; i < noBytes; i++ {
+		if readByte, err = self.buffer.ReadByte(); err != nil {
 			if self.logger != nil {
 				self.logger.Err(fmt.Sprintf("<FSock> Error reading message body: <%s>", err.Error()))
 			}
 			self.Disconnect()
 			return "", err
-		} else { // No Error, add received to localread buffer
-			bytesRead[i] = readByte // Add received line to the local read buffer
 		}
+		// No Error, add received to local read buffer
+		bytesRead[i] = readByte
 	}
 	return string(bytesRead), nil
 }
 
 // Event is made out of headers and body (if present)
-func (self *FSock) readEvent() (string, string, error) {
-	var hdrs, body string
+func (self *FSock) readEvent() (header string, body string, err error) {
 	var cl int
-	var err error
 
-	if hdrs, err = self.readHeaders(); err != nil {
+	if header, err = self.readHeaders(); err != nil {
 		return "", "", err
 	}
-	if !strings.Contains(hdrs, "Content-Length") { //No body
-		return hdrs, "", nil
+	if !strings.Contains(header, "Content-Length") { //No body
+		return header, "", nil
 	}
-	clStr := headerVal(hdrs, "Content-Length")
-	if cl, err = strconv.Atoi(clStr); err != nil {
+	if cl, err = strconv.Atoi(headerVal(header, "Content-Length")); err != nil {
 		return "", "", errors.New("Cannot extract content length")
 	}
 	if body, err = self.readBody(cl); err != nil {
 		return "", "", err
 	}
-	return hdrs, body, nil
+	return
 }
 
 // Read events from network buffer, stop when exitChan is closed, report on errReadEvents on error and exit
 // Receive exitChan and errReadEvents as parameters so we avoid concurrency on using self.
-func (self *FSock) readEvents(exitChan chan struct{}, errReadEvents chan error) {
+func (self *FSock) readEvents() {
+	if self.stopReadEvents == nil {
+		self.stopReadEvents = make(chan struct{})
+	}
+	if self.errReadEvents == nil {
+		self.errReadEvents = make(chan error)
+	}
 	for {
 		select {
-		case <-exitChan:
+		case <-self.stopReadEvents:
 			return
 		default: // Unlock waiting here
 		}
 		hdr, body, err := self.readEvent()
 		if err != nil {
-			errReadEvents <- err
+			self.errReadEvents <- err
 			return
 		}
 		if strings.Contains(hdr, "api/response") {
@@ -301,12 +336,30 @@ func (self *FSock) readEvents(exitChan chan struct{}, errReadEvents chan error) 
 	}
 }
 
+func (self *FSock) send(cmd string) {
+	self.connMutex.RLock()
+	// fmt.Fprint(self.conn, cmd)
+
+	w, err := self.conn.Write([]byte(cmd))
+	if err != nil {
+		if self.logger != nil {
+			self.logger.Err(fmt.Sprintf("<FSock> Cannot write to socket <%s>", err.Error()))
+		}
+		return
+	}
+	/* safety check, since we don't know what may come out of the "net" lib*/
+	if w == 0 {
+		if self.logger != nil {
+			self.logger.Debug("<FSock> Cannot write to socket: " + cmd)
+		}
+		return
+	}
+	self.connMutex.RUnlock()
+}
+
 // Auth to FS
 func (self *FSock) auth() error {
-	authCmd := fmt.Sprintf("auth %s\n\n", self.fspaswd)
-	self.connMutex.RLock()
-	fmt.Fprint(self.conn, authCmd)
-	self.connMutex.RUnlock()
+	self.send(fmt.Sprintf("auth %s\n\n", self.fspaswd))
 	if rply, err := self.readHeaders(); err != nil {
 		return err
 	} else if !strings.Contains(rply, "Reply-Text: +OK accepted") {
@@ -333,13 +386,12 @@ func (self *FSock) eventsPlain(events []string) error {
 		}
 		eventsCmd += " " + ev
 	}
+	eventsCmd += " BACKGROUND_JOB"                                // For bgapi
 	if len(customEvents) != 0 && eventsCmd != "event plain all" { // Add CUSTOM events subscribing in the end otherwise unexpected events are received
 		eventsCmd += " " + "CUSTOM" + customEvents
 	}
-	eventsCmd += "\n\n"
-	self.connMutex.RLock()
-	fmt.Fprint(self.conn, eventsCmd)
-	self.connMutex.RUnlock()
+	eventsCmd += "\n"
+	self.send(eventsCmd)
 	if rply, err := self.readHeaders(); err != nil {
 		return err
 	} else if !strings.Contains(rply, "Reply-Text: +OK") {
@@ -351,15 +403,11 @@ func (self *FSock) eventsPlain(events []string) error {
 
 // Enable filters
 func (self *FSock) filterEvents(filters map[string][]string) error {
-	if len(filters) == 0 { //Nothing to filter
-		return nil
-	}
+	filters["Event-Name"] = append(filters["Event-Name"], "BACKGROUND_JOB") // for bgapi
 	for hdr, vals := range filters {
 		for _, val := range vals {
 			cmd := "filter " + hdr + " " + val + "\n\n"
-			self.connMutex.RLock()
-			fmt.Fprint(self.conn, cmd)
-			self.connMutex.RUnlock()
+			self.send(cmd)
 			if rply, err := self.readHeaders(); err != nil {
 				return err
 			} else if !strings.Contains(rply, "Reply-Text: +OK") {
@@ -373,43 +421,65 @@ func (self *FSock) filterEvents(filters map[string][]string) error {
 // Dispatch events to handlers in async mode
 func (self *FSock) dispatchEvent(event string) {
 	eventName := headerVal(event, "Event-Name")
+
+	if eventName == "BACKGROUND_JOB" { // for bgapi BACKGROUND_JOB
+		go self.backgroudJob(event)
+		return
+	}
+
 	if eventName == "CUSTOM" {
 		eventSubclass := headerVal(event, "Event-Subclass")
 		if len(eventSubclass) != 0 {
 			eventName += " " + urlDecode(eventSubclass)
 		}
 	}
-	handleNames := []string{eventName, "ALL"}
-	dispatched := false
-	for _, handleName := range handleNames {
+
+	for _, handleName := range []string{eventName, "ALL"} {
 		if _, hasHandlers := self.eventHandlers[handleName]; hasHandlers {
 			// We have handlers, dispatch to all of them
 			for _, handlerFunc := range self.eventHandlers[handleName] {
 				go handlerFunc(event, self.connId)
 			}
-			dispatched = true
+			return
 		}
 	}
-	if !dispatched && self.logger != nil {
+	if self.logger != nil {
 		fmt.Printf("No dispatcher, event name: %s, handlers: %+v\n", eventName, self.eventHandlers)
 		self.logger.Warning(fmt.Sprintf("<FSock> No dispatcher for event: <%+v>", event))
 	}
 }
 
-// Checks if socket connected. Can be extended with pings
-func (self *FSock) Connected() bool {
-	self.connMutex.RLock()
-	defer self.connMutex.RUnlock()
-	if self.conn == nil {
-		return false
+// bgapi event lisen fuction
+func (self *FSock) backgroudJob(event string) { // add mutex protection
+	evMap := EventToMap(event)
+	jobUuid, has := evMap["Job-UUID"]
+	if !has {
+		self.logger.Err("<FSock> BACKGROUND_JOB with no Job-UUID")
+		return
 	}
-	return true
+
+	var out chan string
+	out, has = self.backgroundChans[jobUuid]
+	if !has {
+		self.logger.Err(fmt.Sprintf("<FSock> BACKGROUND_JOB with UUID %s lost!", jobUuid))
+		return // not a requested bgapi
+	}
+
+	delete(self.backgroundChans, jobUuid)
+	out <- evMap["EvBody"]
+}
+
+// Checks if socket connected. Can be extended with pings
+func (self *FSock) Connected() (ok bool) {
+	self.connMutex.RLock()
+	ok = (self.conn != nil)
+	self.connMutex.RUnlock()
+	return
 }
 
 // Disconnects from socket
 func (self *FSock) Disconnect() (err error) {
 	self.connMutex.Lock()
-	defer self.connMutex.Unlock()
 	if self.conn != nil {
 		if self.logger != nil {
 			self.logger.Info("<FSock> Disconnecting from FreeSWITCH!")
@@ -417,6 +487,7 @@ func (self *FSock) Disconnect() (err error) {
 		err = self.conn.Close()
 		self.conn = nil
 	}
+	self.connMutex.Unlock()
 	return
 }
 
@@ -446,6 +517,7 @@ func (self *FSock) Connect() error {
 	self.connMutex.RLock()
 	self.buffer = bufio.NewReaderSize(self.conn, 8192) // reinit buffer
 	self.connMutex.RUnlock()
+
 	if authChg, err := self.readHeaders(); err != nil || !strings.Contains(authChg, "auth/request") {
 		return errors.New("No auth challenge received")
 	} else if errAuth := self.auth(); errAuth != nil { // Auth did not succeed
@@ -458,37 +530,30 @@ func (self *FSock) Connect() error {
 		handledEvs[j] = k
 		j++
 	}
-	if subscribeErr := self.eventsPlain(handledEvs); subscribeErr != nil {
-		return subscribeErr
+	if err := self.eventsPlain(handledEvs); err != nil {
+		return err
 	}
-	if filterErr := self.filterEvents(self.eventFilters); filterErr != nil {
-		return filterErr
+	if err := self.filterEvents(self.eventFilters); err != nil {
+		return err
 	}
 	// Reinit readEvents channels so we avoid concurrency issues between goroutines
-	stopReadEvents := make(chan struct{})
-	self.stopReadEvents = stopReadEvents
+	self.stopReadEvents = make(chan struct{})
 	self.errReadEvents = make(chan error)
-	go self.readEvents(stopReadEvents, self.errReadEvents) // Fork read events in it's own goroutine
+	go self.readEvents() // Fork read events in it's own goroutine
 	return nil
 }
 
 // If not connected, attempt reconnect if allowed
-func (self *FSock) ReconnectIfNeeded() error {
+func (self *FSock) ReconnectIfNeeded() (err error) {
 	if self.Connected() { // No need to reconnect
 		return nil
 	}
-	var err error
-	i := 0
-	for {
-		if self.reconnects != -1 && i >= self.reconnects { // Maximum reconnects reached, -1 for infinite reconnects
-			break
-		}
+	for i := 0; self.reconnects != -1 && i >= self.reconnects; i++ { // Maximum reconnects reached, -1 for infinite reconnects
 		if err = self.Connect(); err == nil || self.Connected() {
 			self.delayFunc = fib() // Reset the reconnect delay
 			break                  // No error or unrelated to connection
 		}
 		time.Sleep(time.Duration(self.delayFunc()) * time.Second)
-		i++
 	}
 	if err == nil && !self.Connected() {
 		return errors.New("Not connected to FreeSWITCH")
@@ -496,43 +561,43 @@ func (self *FSock) ReconnectIfNeeded() error {
 	return err // nil or last error in the loop
 }
 
-// Generic proxy for commands
-func (self *FSock) SendCmd(cmdStr string) (string, error) {
-	if err := self.ReconnectIfNeeded(); err != nil {
+func (self *FSock) sendCmd(cmd string, cmdChan chan string) (rply string, err error) {
+	if err = self.ReconnectIfNeeded(); err != nil {
 		return "", err
 	}
-	cmd := fmt.Sprintf("%s\n\n", cmdStr)
-	self.connMutex.RLock()
-	fmt.Fprint(self.conn, cmd)
-	self.connMutex.RUnlock()
-	resEvent := <-self.cmdChan
-	if strings.Contains(resEvent, "-ERR") {
-		return "", errors.New(strings.TrimSpace(resEvent))
+	cmd = fmt.Sprintf("%s\n", cmd)
+	self.send(cmd)
+	rply = <-cmdChan
+	if strings.Contains(rply, "-ERR") {
+		return "", errors.New(strings.TrimSpace(rply))
 	}
-	return resEvent, nil
+	return rply, nil
+}
+
+// Generic proxy for commands
+func (self *FSock) SendCmd(cmdStr string) (string, error) {
+	return self.sendCmd(cmdStr+"\n", self.cmdChan)
 }
 
 // Send API command
 func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
-	if err := self.ReconnectIfNeeded(); err != nil {
-		return "", err
+	return self.sendCmd("api "+cmdStr+"\n", self.apiChan)
+}
+
+// Send BGAPI command
+func (self *FSock) SendBgapiCmd(cmdStr string) (out chan string, err error) {
+	jobUuid := genUUID()
+	out = make(chan string)
+	_, err = self.sendCmd(fmt.Sprintf("bgapi %s\nJob-UUID:%s", cmdStr, jobUuid), self.cmdChan)
+	if err != nil {
+		return nil, err
 	}
-	cmd := fmt.Sprintf("api %s\n\n", cmdStr)
-	self.connMutex.RLock()
-	fmt.Fprint(self.conn, cmd)
-	self.connMutex.RUnlock()
-	resEvent := <-self.apiChan
-	if strings.Contains(resEvent, "-ERR") {
-		return "", errors.New(strings.TrimSpace(resEvent))
-	}
-	return resEvent, nil
+	self.backgroundChans[jobUuid] = out
+	return
 }
 
 // SendMessage command
 func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
-	if err := self.ReconnectIfNeeded(); err != nil {
-		return err
-	}
 	if len(cmdargs) == 0 {
 		return errors.New("Need command arguments")
 	}
@@ -540,22 +605,12 @@ func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
 	for k, v := range cmdargs {
 		argStr += fmt.Sprintf("%s:%s\n", k, v)
 	}
-	self.connMutex.RLock()
-	fmt.Fprint(self.conn, fmt.Sprintf("sendmsg %s\n%s\n", uuid, argStr))
-	self.connMutex.RUnlock()
-	replyTxt := <-self.cmdChan
-	if strings.HasPrefix(replyTxt, "-ERR") {
-		return errors.New(strings.TrimSpace(replyTxt))
-	}
-	return nil
+	_, err := self.sendCmd(fmt.Sprintf("sendmsg %s\n%s", uuid, argStr), self.cmdChan)
+	return err
 }
 
 // SendEvent command
 func (self *FSock) SendEvent(eventSubclass string, eventParams map[string]string) (string, error) {
-	if err := self.ReconnectIfNeeded(); err != nil {
-		return "", err
-	}
-
 	// Event-Name is overrided to CUSTOM by FreeSWITCH,
 	// so we use Event-Subclass instead
 	eventParams["Event-Subclass"] = eventSubclass
@@ -563,15 +618,7 @@ func (self *FSock) SendEvent(eventSubclass string, eventParams map[string]string
 	for k, v := range eventParams {
 		cmd += fmt.Sprintf("%s: %s\n", k, v)
 	}
-
-	self.connMutex.RLock()
-	fmt.Fprint(self.conn, fmt.Sprintf("%s\n", cmd))
-	self.connMutex.RUnlock()
-	resEvent := <-self.cmdChan
-	if strings.Contains(resEvent, "-ERR") {
-		return "", errors.New(strings.TrimSpace(resEvent))
-	}
-	return resEvent, nil
+	return self.sendCmd(cmd, self.cmdChan)
 }
 
 // Reads events from socket, attempt reconnect if disconnected
@@ -594,40 +641,51 @@ func (self *FSock) LocalAddr() net.Addr {
 }
 
 // Connects to FS and starts buffering input
-func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string, string), eventFilters map[string][]string, l *syslog.Writer, connId string) (*FSock, error) {
-	fsock := FSock{connMutex: new(sync.RWMutex), connId: connId, fsaddress: fsaddr, fspaswd: fspaswd, eventHandlers: eventHandlers, eventFilters: eventFilters, reconnects: reconnects,
-		logger: l, apiChan: make(chan string), cmdChan: make(chan string), delayFunc: fib()}
-	errConn := fsock.Connect()
-	if errConn != nil {
-		return nil, errConn
+func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string, string), eventFilters map[string][]string, l *syslog.Writer, connId string) (fsock *FSock, err error) {
+
+	fsock = &FSock{
+		connMutex:     new(sync.RWMutex),
+		connId:        connId,
+		fsaddress:     fsaddr,
+		fspaswd:       fspaswd,
+		eventHandlers: eventHandlers,
+		eventFilters:  eventFilters,
+		reconnects:    reconnects,
+		logger:        l,
+		apiChan:       make(chan string),
+		cmdChan:       make(chan string),
+		delayFunc:     fib(),
 	}
-	return &fsock, nil
+	if err = fsock.Connect(); err != nil {
+		return nil, err
+	}
+	return
 }
 
 var ErrConnectionPoolTimeout = errors.New("ConnectionPool timeout")
 
 // Connection handler for commands sent to FreeSWITCH
 type FSockPool struct {
-	connId, fsAddr, fsPasswd string
-	reconnects               int
-	eventHandlers            map[string][]func(string, string)
-	eventFilters             map[string][]string
-	logger                   *syslog.Writer
-	allowedConns             chan struct{} // Will be populated with members allowed
-	fSocks                   chan *FSock   // Keep here reference towards the list of opened sockets
-	maxWaitConn              time.Duration // Maximum duration to wait for a connection to be returned by Pop
+	connId        string
+	fsAddr        string
+	fsPasswd      string
+	reconnects    int
+	eventHandlers map[string][]func(string, string)
+	eventFilters  map[string][]string
+	logger        *syslog.Writer
+	allowedConns  chan struct{} // Will be populated with members allowed
+	fSocks        chan *FSock   // Keep here reference towards the list of opened sockets
+	maxWaitConn   time.Duration // Maximum duration to wait for a connection to be returned by Pop
 }
 
-func (self *FSockPool) PopFSock() (*FSock, error) {
+func (self *FSockPool) PopFSock() (fsock *FSock, err error) {
 	if self == nil {
 		return nil, errors.New("Unconfigured ConnectionPool")
 	}
 	if len(self.fSocks) != 0 { // Select directly if available, so we avoid randomness of selection
-		fsock := <-self.fSocks
+		fsock = <-self.fSocks
 		return fsock, nil
 	}
-	var fsock *FSock
-	var err error
 	select { // No fsock available in the pool, wait for first one showing up
 	case fsock = <-self.fSocks:
 	case <-self.allowedConns:
@@ -656,13 +714,20 @@ func (self *FSockPool) PushFSock(fsk *FSock) {
 // Instantiates a new FSockPool
 func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
 	eventHandlers map[string][]func(string, string), eventFilters map[string][]string, l *syslog.Writer, connId string) (*FSockPool, error) {
-	pool := &FSockPool{connId: connId, fsAddr: fsaddr, fsPasswd: fspasswd, reconnects: reconnects, maxWaitConn: maxWaitConn,
-		eventHandlers: eventHandlers, eventFilters: eventFilters, logger: l}
-	pool.allowedConns = make(chan struct{}, maxFSocks)
-	var emptyConn struct{}
-	for i := 0; i < maxFSocks; i++ {
-		pool.allowedConns <- emptyConn // Empty initiate so we do not need to wait later when we pop
+	pool := &FSockPool{
+		connId:        connId,
+		fsAddr:        fsaddr,
+		fsPasswd:      fspasswd,
+		reconnects:    reconnects,
+		maxWaitConn:   maxWaitConn,
+		eventHandlers: eventHandlers,
+		eventFilters:  eventFilters,
+		logger:        l,
+		allowedConns:  make(chan struct{}, maxFSocks),
+		fSocks:        make(chan *FSock, maxFSocks),
 	}
-	pool.fSocks = make(chan *FSock, maxFSocks)
+	for i := 0; i < maxFSocks; i++ {
+		pool.allowedConns <- struct{}{} // Empty initiate so we do not need to wait later when we pop
+	}
 	return pool, nil
 }
