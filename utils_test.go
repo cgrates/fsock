@@ -272,8 +272,7 @@ FreeSWITCH (Version 1.8.2 -3-a98a958ac3 64bit) is ready
 0 session(s) per Sec out of max 30, peak 0, last 5min 0 
 1000 session(s) max
 min idle cpu 0.00/99.50
-Current Stack Size/Max 240K/8192K
-`
+Current Stack Size/Max 240K/8192K`
 	expected := map[string]string{
 		"Event-Name":                "BACKGROUND_JOB",
 		"Core-UUID":                 "32a090b2-7279-4d0f-b33d-1e42c87af186",
@@ -298,8 +297,7 @@ FreeSWITCH (Version 1.8.2 -3-a98a958ac3 64bit) is ready
 0 session(s) per Sec out of max 30, peak 0, last 5min 0 
 1000 session(s) max
 min idle cpu 0.00/99.50
-Current Stack Size/Max 240K/8192K
-`}
+Current Stack Size/Max 240K/8192K`}
 	if rply := EventToMap(event); !reflect.DeepEqual(rply, expected) {
 		t.Errorf("Expected: %s , recieved: %s", toJSON(expected), toJSON(rply))
 	}
