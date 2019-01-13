@@ -1,5 +1,5 @@
 /*
-fsock.go is released under the MIT License <http://www.opensource.org/licenses/mit-license.php
+utils_test.go is released under the MIT License <http://www.opensource.org/licenses/mit-license.php
 Copyright (C) ITsysCOM. All Rights Reserved.
 
 Provides FreeSWITCH socket communication.

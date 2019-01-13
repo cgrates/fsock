@@ -125,12 +125,6 @@ func (self *FSock) connect() error {
 	return nil
 }
 
-func (self *FSock) CloseChans() {
-	if self.stopReadEvents != nil {
-		close(self.stopReadEvents) // we have read events already processing, request stop
-	}
-}
-
 // Checks if socket connected. Can be extended with pings
 func (self *FSock) Connected() (ok bool) {
 	self.fsMutex.RLock()
@@ -269,11 +263,6 @@ func (self *FSock) SendEvent(eventSubclass string, eventParams map[string]string
 func (self *FSock) ReadEvents() (err error) {
 	var opened bool
 	for {
-		select {
-		case <-self.stopReadEvents:
-			return nil
-		default:
-		}
 		if err, opened = <-self.errReadEvents; !opened {
 			return nil
 		} else if err == io.EOF { // Disconnected, try reconnect
