@@ -43,7 +43,6 @@ func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][
 		eventHandlers:   eventHandlers,
 		eventFilters:    eventFilters,
 		backgroundChans: make(map[string]chan string),
-		apiChan:         make(chan string),
 		cmdChan:         make(chan string),
 		reconnects:      reconnects,
 		delayFunc:       DelayFunc(),
@@ -66,7 +65,6 @@ type FSock struct {
 	eventHandlers   map[string][]func(string, string) // eventStr, connId
 	eventFilters    map[string][]string
 	backgroundChans map[string]chan string
-	apiChan         chan string
 	cmdChan         chan string
 	reconnects      int
 	delayFunc       func() int
@@ -77,9 +75,21 @@ type FSock struct {
 
 // Connect or reconnect
 func (self *FSock) Connect() error {
+	if self.stopReadEvents != nil {
+		close(self.stopReadEvents) // we have read events already processing, request stop
+	}
+	// Reinit readEvents channels so we avoid concurrency issues between goroutines
+	self.stopReadEvents = make(chan struct{})
+	self.errReadEvents = make(chan error)
+	return self.connect()
+
+}
+
+func (self *FSock) connect() error {
 	if self.Connected() {
 		self.Disconnect()
 	}
+
 	conn, err := net.Dial("tcp", self.fsaddress)
 	if err != nil {
 		if self.logger != nil {
@@ -111,14 +121,14 @@ func (self *FSock) Connect() error {
 	if err := self.filterEvents(self.eventFilters); err != nil {
 		return err
 	}
-	// Reinit readEvents channels so we avoid concurrency issues between goroutines
-	if self.stopReadEvents != nil { // ToDo: Check if the channel is not already closed
-		close(self.stopReadEvents) // we have read events already processing, request stop
-	}
-	self.stopReadEvents = make(chan struct{})
-	self.errReadEvents = make(chan error)
 	go self.readEvents() // Fork read events in it's own goroutine
 	return nil
+}
+
+func (self *FSock) CloseChans() {
+	if self.stopReadEvents != nil {
+		close(self.stopReadEvents) // we have read events already processing, request stop
+	}
 }
 
 // Checks if socket connected. Can be extended with pings
@@ -140,7 +150,6 @@ func (self *FSock) Disconnect() (err error) {
 		self.conn = nil
 	}
 	self.fsMutex.Unlock()
-	// self.stopReadEvents <- struct{}{}
 	return
 }
 
@@ -149,8 +158,8 @@ func (self *FSock) ReconnectIfNeeded() (err error) {
 	if self.Connected() { // No need to reconnect
 		return nil
 	}
-	for i := 0; self.reconnects != -1 && i >= self.reconnects; i++ { // Maximum reconnects reached, -1 for infinite reconnects
-		if err = self.Connect(); err == nil || self.Connected() {
+	for i := 0; self.reconnects == -1 || i < self.reconnects; i++ { // Maximum reconnects reached, -1 for infinite reconnects
+		if err = self.connect(); err == nil && self.Connected() {
 			self.delayFunc = DelayFunc() // Reset the reconnect delay
 			break                        // No error or unrelated to connection
 		}
@@ -212,7 +221,7 @@ func (self *FSock) SendCmd(cmdStr string) (string, error) {
 
 // Send API command
 func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
-	return self.sendCmd("api "+cmdStr+"\n", self.apiChan)
+	return self.sendCmd("api "+cmdStr+"\n", self.cmdChan)
 }
 
 // Send BGAPI command
@@ -258,8 +267,16 @@ func (self *FSock) SendEvent(eventSubclass string, eventParams map[string]string
 
 // Reads events from socket, attempt reconnect if disconnected
 func (self *FSock) ReadEvents() (err error) {
+	var opened bool
 	for {
-		if err = <-self.errReadEvents; err == io.EOF { // Disconnected, try reconnect
+		select {
+		case <-self.stopReadEvents:
+			return nil
+		default:
+		}
+		if err, opened = <-self.errReadEvents; !opened {
+			return nil
+		} else if err == io.EOF { // Disconnected, try reconnect
 			if err = self.ReconnectIfNeeded(); err != nil {
 				break
 			}
@@ -339,12 +356,6 @@ func (self *FSock) readEvent() (header string, body string, err error) {
 // Read events from network buffer, stop when exitChan is closed, report on errReadEvents on error and exit
 // Receive exitChan and errReadEvents as parameters so we avoid concurrency on using self.
 func (self *FSock) readEvents() {
-	if self.stopReadEvents == nil {
-		self.stopReadEvents = make(chan struct{})
-	}
-	if self.errReadEvents == nil {
-		self.errReadEvents = make(chan error)
-	}
 	for {
 		select {
 		case <-self.stopReadEvents:
@@ -357,7 +368,7 @@ func (self *FSock) readEvents() {
 			return
 		}
 		if strings.Contains(hdr, "api/response") {
-			self.apiChan <- body
+			self.cmdChan <- body
 		} else if strings.Contains(hdr, "command/reply") {
 			self.cmdChan <- headerVal(hdr, "Reply-Text")
 		} else if body != "" { // We got a body, could be event, try dispatching it
@@ -368,9 +379,9 @@ func (self *FSock) readEvents() {
 
 // Subscribe to events
 func (self *FSock) eventsPlain(events []string) error {
-	if len(events) == 0 {
-		return nil
-	}
+	// if len(events) == 0 {
+	// 	return nil
+	// }
 	eventsCmd := "event plain"
 	customEvents := ""
 	for _, ev := range events {
@@ -424,7 +435,6 @@ func (self *FSock) filterEvents(filters map[string][]string) error {
 // Dispatch events to handlers in async mode
 func (self *FSock) dispatchEvent(event string) {
 	eventName := headerVal(event, "Event-Name")
-
 	if eventName == "BACKGROUND_JOB" { // for bgapi BACKGROUND_JOB
 		go self.doBackgroudJob(event)
 		return

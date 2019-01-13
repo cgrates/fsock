@@ -61,19 +61,19 @@ func MapChanData(chanInfoStr string) (chansInfoMap []map[string]string) {
 func EventToMap(event string) (result map[string]string) {
 	result = make(map[string]string)
 	body := false
-	for _, line := range strings.Split(event, "\n") {
-		if len(line) == 0 {
+	spltevent := strings.Split(event, "\n")
+	for i := 0; i < len(spltevent); i++ {
+		if len(spltevent[i]) == 0 {
 			body = true
 			continue
 		}
 		if body {
-			result[EventBodyTag] = result[EventBodyTag] + line + "\n"
-			continue
+			result[EventBodyTag] = strings.Join(spltevent[i:], "\n")
+			return
 		}
-		if val := strings.SplitN(line, ": ", 2); len(val) == 2 {
+		if val := strings.SplitN(spltevent[i], ": ", 2); len(val) == 2 {
 			result[val[0]] = urlDecode(strings.TrimSpace(val[1]))
 		}
-
 	}
 	return
 }

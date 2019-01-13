@@ -116,9 +116,12 @@ func TestReadEvents(t *testing.T) {
 
 var FSTests = []func(*FSock, *testing.T){
 	testSendCmd,
-	// testSendApiCmd,
-	// testSendBgapiCmd1,
-	// testReconect,
+	testSendApiCmd,
+	testSendBgapiCmd1,
+	testReconect,
+	testSendCmd,
+	testSendApiCmd,
+	testSendBgapiCmd1,
 }
 
 func TestFSock(t *testing.T) {
@@ -148,6 +151,7 @@ func TestFSock(t *testing.T) {
 	if err = fs.Disconnect(); err != nil {
 		t.Error(err)
 	}
+	// fs.CloseChans()
 }
 
 func testReconect(fs *FSock, t *testing.T) {
@@ -166,7 +170,7 @@ func testReconect(fs *FSock, t *testing.T) {
 
 func testSendCmd(fs *FSock, t *testing.T) {
 	expected := "Command recived!"
-	cmd := fmt.Sprintf("api eval %s", expected)
+	cmd := fmt.Sprintf("api eval %s\n\n", expected)
 	if rply, err := fs.SendCmd(cmd); err != nil {
 		t.Error(err)
 	} else if rply != expected {
@@ -194,7 +198,7 @@ func testSendBgapiCmd1(fs *FSock, t *testing.T) {
 		select {
 		case rply = <-ch:
 			if rply != expected {
-				t.Errorf("Expected: %s , recieved: %s", expected, rply)
+				t.Errorf("Expected: %q , recieved: %q", expected, rply)
 			}
 		case <-time.After(5 * time.Second):
 			t.Errorf("Timeout")
