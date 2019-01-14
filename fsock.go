@@ -195,13 +195,13 @@ func (self *FSock) auth() error {
 	return nil
 }
 
-func (self *FSock) sendCmd(cmd string, cmdChan chan string) (rply string, err error) {
+func (self *FSock) sendCmd(cmd string) (rply string, err error) {
 	if err = self.ReconnectIfNeeded(); err != nil {
 		return "", err
 	}
 	cmd = fmt.Sprintf("%s\n", cmd)
 	self.send(cmd)
-	rply = <-cmdChan
+	rply = <-self.cmdChan
 	if strings.Contains(rply, "-ERR") {
 		return "", errors.New(strings.TrimSpace(rply))
 	}
@@ -210,12 +210,22 @@ func (self *FSock) sendCmd(cmd string, cmdChan chan string) (rply string, err er
 
 // Generic proxy for commands
 func (self *FSock) SendCmd(cmdStr string) (string, error) {
-	return self.sendCmd(cmdStr+"\n", self.cmdChan)
+	return self.sendCmd(cmdStr + "\n")
+}
+
+func (self *FSock) SendCmdWithArgs(cmd string, args map[string]string, body string) (string, error) {
+	for k, v := range args {
+		cmd += fmt.Sprintf("%s: %s\n", k, v)
+	}
+	if len(body) != 0 {
+		cmd += fmt.Sprintf("\n%s\n", body)
+	}
+	return self.sendCmd(cmd)
 }
 
 // Send API command
 func (self *FSock) SendApiCmd(cmdStr string) (string, error) {
-	return self.sendCmd("api "+cmdStr+"\n", self.cmdChan)
+	return self.sendCmd("api " + cmdStr + "\n")
 }
 
 // Send BGAPI command
@@ -227,7 +237,7 @@ func (self *FSock) SendBgapiCmd(cmdStr string) (out chan string, err error) {
 	self.backgroundChans[jobUuid] = out
 	self.fsMutex.Unlock()
 
-	_, err = self.sendCmd(fmt.Sprintf("bgapi %s\nJob-UUID:%s\n", cmdStr, jobUuid), self.cmdChan)
+	_, err = self.sendCmd(fmt.Sprintf("bgapi %s\nJob-UUID:%s\n", cmdStr, jobUuid))
 	if err != nil {
 		return nil, err
 	}
@@ -235,28 +245,30 @@ func (self *FSock) SendBgapiCmd(cmdStr string) (out chan string, err error) {
 }
 
 // SendMessage command
-func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
+func (self *FSock) SendMsgCmdWithBody(uuid string, cmdargs map[string]string, body string) error {
 	if len(cmdargs) == 0 {
 		return errors.New("Need command arguments")
 	}
-	argStr := ""
-	for k, v := range cmdargs {
-		argStr += fmt.Sprintf("%s:%s\n", k, v)
-	}
-	_, err := self.sendCmd(fmt.Sprintf("sendmsg %s\n%s", uuid, argStr), self.cmdChan)
+	_, err := self.SendCmdWithArgs(fmt.Sprintf("sendmsg %s\n", uuid), cmdargs, body)
 	return err
+}
+
+// SendMessage command
+func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
+	return self.SendMsgCmdWithBody(uuid, cmdargs, "")
+}
+
+// SendEvent command
+func (self *FSock) SendEventWithBody(eventSubclass string, eventParams map[string]string, body string) (string, error) {
+	// Event-Name is overrided to CUSTOM by FreeSWITCH,
+	// so we use Event-Subclass instead
+	eventParams["Event-Subclass"] = eventSubclass
+	return self.SendCmdWithArgs(fmt.Sprintf("sendevent %s\n", eventSubclass), eventParams, body)
 }
 
 // SendEvent command
 func (self *FSock) SendEvent(eventSubclass string, eventParams map[string]string) (string, error) {
-	// Event-Name is overrided to CUSTOM by FreeSWITCH,
-	// so we use Event-Subclass instead
-	eventParams["Event-Subclass"] = eventSubclass
-	cmd := fmt.Sprintf("sendevent %s\n", eventSubclass)
-	for k, v := range eventParams {
-		cmd += fmt.Sprintf("%s: %s\n", k, v)
-	}
-	return self.sendCmd(cmd, self.cmdChan)
+	return self.SendEventWithBody(eventSubclass, eventParams, "")
 }
 
 // Reads events from socket, attempt reconnect if disconnected

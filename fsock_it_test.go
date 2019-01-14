@@ -12,6 +12,7 @@ package fsock
 import (
 	"fmt"
 	"log/syslog"
+	"strings"
 	"testing"
 	"time"
 )
@@ -19,11 +20,13 @@ import (
 var FSTests = []func(*FSock, *testing.T){
 	testSendCmd,
 	testSendApiCmd,
-	testSendBgapiCmd1,
+	testSendBgapiCmd,
 	testReconect,
 	testSendCmd,
 	testSendApiCmd,
-	testSendBgapiCmd1,
+	testSendBgapiCmd,
+	testSendEventWithBody,
+	testSendEvent,
 }
 
 func TestFSock(t *testing.T) {
@@ -89,7 +92,7 @@ func testSendApiCmd(fs *FSock, t *testing.T) {
 	}
 }
 
-func testSendBgapiCmd1(fs *FSock, t *testing.T) {
+func testSendBgapiCmd(fs *FSock, t *testing.T) {
 	expected := "Command recived!"
 	cmd := fmt.Sprintf("eval %s", expected)
 	if ch, err := fs.SendBgapiCmd(cmd); err != nil {
@@ -104,5 +107,40 @@ func testSendBgapiCmd1(fs *FSock, t *testing.T) {
 		case <-time.After(5 * time.Second):
 			t.Errorf("Timeout")
 		}
+	}
+}
+
+func testSendEventWithBody(fs *FSock, t *testing.T) {
+	event := "NOTIFY"
+	args := map[string]string{
+		"profile":        "internal",
+		"content-type":   "application/simple-message-summary",
+		"event-string":   "check-sync",
+		"user":           "1006",
+		"host":           "99.157.44.194",
+		"content-length": "2",
+	}
+	body := "OK"
+
+	if rply, err := fs.SendEventWithBody(event, args, body); err != nil {
+		t.Error(err)
+	} else if !strings.HasPrefix(rply, "+OK") {
+		t.Errorf("Event resonse wrong %s", rply)
+	}
+}
+
+func testSendEvent(fs *FSock, t *testing.T) {
+	event := "NOTIFY"
+	args := map[string]string{
+		"profile":      "internal",
+		"content-type": "application/simple-message-summary",
+		"event-string": "check-sync;reboot=false",
+		"user":         "1005",
+		"host":         "99.157.44.194",
+	}
+	if rply, err := fs.SendEvent(event, args); err != nil {
+		t.Error(err)
+	} else if !strings.HasPrefix(rply, "+OK") {
+		t.Errorf("Event resonse wrong %s", rply)
 	}
 }
