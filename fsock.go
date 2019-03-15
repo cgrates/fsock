@@ -125,7 +125,7 @@ func (self *FSock) connect() error {
 	return nil
 }
 
-// Checks if socket connected. Can be extended with pings
+// Connected checks if socket connected. Can be extended with pings
 func (self *FSock) Connected() (ok bool) {
 	self.fsMutex.RLock()
 	ok = (self.conn != nil)
@@ -244,7 +244,7 @@ func (self *FSock) SendBgapiCmd(cmdStr string) (out chan string, err error) {
 	return
 }
 
-// SendMessage command
+// SendMsgCmdWithBody command
 func (self *FSock) SendMsgCmdWithBody(uuid string, cmdargs map[string]string, body string) error {
 	if len(cmdargs) == 0 {
 		return errors.New("Need command arguments")
@@ -253,12 +253,12 @@ func (self *FSock) SendMsgCmdWithBody(uuid string, cmdargs map[string]string, bo
 	return err
 }
 
-// SendMessage command
+// SendMsgCmd command
 func (self *FSock) SendMsgCmd(uuid string, cmdargs map[string]string) error {
 	return self.SendMsgCmdWithBody(uuid, cmdargs, "")
 }
 
-// SendEvent command
+// SendEventWithBody command
 func (self *FSock) SendEventWithBody(eventSubclass string, eventParams map[string]string, body string) (string, error) {
 	// Event-Name is overrided to CUSTOM by FreeSWITCH,
 	// so we use Event-Subclass instead
@@ -271,7 +271,7 @@ func (self *FSock) SendEvent(eventSubclass string, eventParams map[string]string
 	return self.SendEventWithBody(eventSubclass, eventParams, "")
 }
 
-// Reads events from socket, attempt reconnect if disconnected
+// ReadEvents reads events from socket, attempt reconnect if disconnected
 func (self *FSock) ReadEvents() (err error) {
 	var opened bool
 	for {
