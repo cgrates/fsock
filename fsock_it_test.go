@@ -33,13 +33,13 @@ func TestFSock(t *testing.T) {
 	faddr := "127.0.0.1:8021"
 	fpass := "ClueCon"
 	noreconects := 10
-	conID := "wetsfnmretiewrtpj"
+	conID := 0
 	l, errLog := syslog.New(syslog.LOG_INFO, "TestFSock")
 	if errLog != nil {
 		t.Fatal(errLog)
 	}
 	evFilters := make(map[string][]string)
-	evHandlers := make(map[string][]func(string, string))
+	evHandlers := make(map[string][]func(string, int))
 
 	fs, err := NewFSock(faddr, fpass, noreconects, evHandlers, evFilters, l, conID)
 	if err != nil {

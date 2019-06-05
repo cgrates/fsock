@@ -34,10 +34,10 @@ func init() {
 }
 
 // Connects to FS and starts buffering input
-func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string, string), eventFilters map[string][]string, l *syslog.Writer, connId string) (fsock *FSock, err error) {
+func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][]func(string, int), eventFilters map[string][]string, l *syslog.Writer, connIdx int) (fsock *FSock, err error) {
 	fsock = &FSock{
 		fsMutex:         new(sync.RWMutex),
-		connId:          connId,
+		connIdx:         connIdx,
 		fsaddress:       fsaddr,
 		fspaswd:         fspaswd,
 		eventHandlers:   eventHandlers,
@@ -58,11 +58,11 @@ func NewFSock(fsaddr, fspaswd string, reconnects int, eventHandlers map[string][
 type FSock struct {
 	conn            net.Conn
 	fsMutex         *sync.RWMutex
-	connId          string // Indetifier for the component using this instance of FSock, optional
+	connIdx         int // Indetifier for the component using this instance of FSock, optional
 	buffer          *bufio.Reader
 	fsaddress       string
 	fspaswd         string
-	eventHandlers   map[string][]func(string, string) // eventStr, connId
+	eventHandlers   map[string][]func(string, int) // eventStr, connId
 	eventFilters    map[string][]string
 	backgroundChans map[string]chan string
 	cmdChan         chan string
@@ -452,7 +452,7 @@ func (self *FSock) dispatchEvent(event string) {
 		if _, hasHandlers := self.eventHandlers[handleName]; hasHandlers {
 			// We have handlers, dispatch to all of them
 			for _, handlerFunc := range self.eventHandlers[handleName] {
-				go handlerFunc(event, self.connId)
+				go handlerFunc(event, self.connIdx)
 			}
 			return
 		}
@@ -490,9 +490,9 @@ func (self *FSock) doBackgroudJob(event string) { // add mutex protection
 
 // Instantiates a new FSockPool
 func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
-	eventHandlers map[string][]func(string, string), eventFilters map[string][]string, l *syslog.Writer, connId string) (*FSockPool, error) {
+	eventHandlers map[string][]func(string, int), eventFilters map[string][]string, l *syslog.Writer, connIdx int) (*FSockPool, error) {
 	pool := &FSockPool{
-		connId:        connId,
+		connIdx:       connIdx,
 		fsAddr:        fsaddr,
 		fsPasswd:      fspasswd,
 		reconnects:    reconnects,
@@ -511,11 +511,11 @@ func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWai
 
 // Connection handler for commands sent to FreeSWITCH
 type FSockPool struct {
-	connId        string
+	connIdx       int
 	fsAddr        string
 	fsPasswd      string
 	reconnects    int
-	eventHandlers map[string][]func(string, string)
+	eventHandlers map[string][]func(string, int)
 	eventFilters  map[string][]string
 	logger        *syslog.Writer
 	allowedConns  chan struct{} // Will be populated with members allowed
@@ -534,7 +534,7 @@ func (self *FSockPool) PopFSock() (fsock *FSock, err error) {
 	select { // No fsock available in the pool, wait for first one showing up
 	case fsock = <-self.fSocks:
 	case <-self.allowedConns:
-		fsock, err = NewFSock(self.fsAddr, self.fsPasswd, self.reconnects, self.eventHandlers, self.eventFilters, self.logger, self.connId)
+		fsock, err = NewFSock(self.fsAddr, self.fsPasswd, self.reconnects, self.eventHandlers, self.eventFilters, self.logger, self.connIdx)
 		if err != nil {
 			return nil, err
 		}
