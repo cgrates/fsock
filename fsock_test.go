@@ -84,7 +84,7 @@ func TestReadEvents(t *testing.T) {
 	}
 	funcMutex := new(sync.RWMutex)
 	var events int32
-	evfunc := func(string, string) {
+	evfunc := func(string, int) {
 		funcMutex.Lock()
 		events++
 		funcMutex.Unlock()
@@ -93,21 +93,21 @@ func TestReadEvents(t *testing.T) {
 	FS = &FSock{}
 	FS.fsMutex = new(sync.RWMutex)
 	FS.buffer = bufio.NewReader(r)
-	FS.eventHandlers = map[string][]func(string, string){
-		"HEARTBEAT":                []func(string, string){evfunc},
-		"RE_SCHEDULE":              []func(string, string){evfunc},
-		"CHANNEL_STATE":            []func(string, string){evfunc},
-		"CODEC":                    []func(string, string){evfunc},
-		"CHANNEL_CREATE":           []func(string, string){evfunc},
-		"CHANNEL_CALLSTATE":        []func(string, string){evfunc},
-		"API":                      []func(string, string){evfunc},
-		"CHANNEL_EXECUTE":          []func(string, string){evfunc},
-		"CHANNEL_EXECUTE_COMPLETE": []func(string, string){evfunc},
-		"CHANNEL_PARK":             []func(string, string){evfunc},
-		"CHANNEL_HANGUP":           []func(string, string){evfunc},
-		"CHANNEL_HANGUP_COMPLETE":  []func(string, string){evfunc},
-		"CHANNEL_UNPARK":           []func(string, string){evfunc},
-		"CHANNEL_DESTROY":          []func(string, string){evfunc},
+	FS.eventHandlers = map[string][]func(string, int){
+		"HEARTBEAT":                []func(string, int){evfunc},
+		"RE_SCHEDULE":              []func(string, int){evfunc},
+		"CHANNEL_STATE":            []func(string, int){evfunc},
+		"CODEC":                    []func(string, int){evfunc},
+		"CHANNEL_CREATE":           []func(string, int){evfunc},
+		"CHANNEL_CALLSTATE":        []func(string, int){evfunc},
+		"API":                      []func(string, int){evfunc},
+		"CHANNEL_EXECUTE":          []func(string, int){evfunc},
+		"CHANNEL_EXECUTE_COMPLETE": []func(string, int){evfunc},
+		"CHANNEL_PARK":             []func(string, int){evfunc},
+		"CHANNEL_HANGUP":           []func(string, int){evfunc},
+		"CHANNEL_HANGUP_COMPLETE":  []func(string, int){evfunc},
+		"CHANNEL_UNPARK":           []func(string, int){evfunc},
+		"CHANNEL_DESTROY":          []func(string, int){evfunc},
 	}
 	go FS.readEvents()
 	w.Write(data)

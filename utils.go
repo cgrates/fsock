@@ -208,7 +208,7 @@ func urlDecode(hdrVal string) string {
 	return hdrVal
 }
 
-func getMapKeys(m map[string][]func(string, string)) (keys []string) {
+func getMapKeys(m map[string][]func(string, int)) (keys []string) {
 	keys = make([]string, len(m))
 	indx := 0
 	for key := range m {

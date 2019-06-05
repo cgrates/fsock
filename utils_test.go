@@ -345,22 +345,22 @@ Content-Length: 342
 }
 
 func TestgetMapKeys(t *testing.T) {
-	fct := func(string, string) {}
-	hMap := map[string][]func(string, string){
-		"HEARTBEAT":                []func(string, string){fct},
-		"RE_SCHEDULE":              []func(string, string){fct},
-		"CHANNEL_STATE":            []func(string, string){fct},
-		"CODEC":                    []func(string, string){fct},
-		"CHANNEL_CREATE":           []func(string, string){fct},
-		"CHANNEL_CALLSTATE":        []func(string, string){fct},
-		"API":                      []func(string, string){fct},
-		"CHANNEL_EXECUTE":          []func(string, string){fct},
-		"CHANNEL_EXECUTE_COMPLETE": []func(string, string){fct},
-		"CHANNEL_PARK":             []func(string, string){fct},
-		"CHANNEL_HANGUP":           []func(string, string){fct},
-		"CHANNEL_HANGUP_COMPLETE":  []func(string, string){fct},
-		"CHANNEL_UNPARK":           []func(string, string){fct},
-		"CHANNEL_DESTROY":          []func(string, string){fct},
+	fct := func(string, int) {}
+	hMap := map[string][]func(string, int){
+		"HEARTBEAT":                []func(string, int){fct},
+		"RE_SCHEDULE":              []func(string, int){fct},
+		"CHANNEL_STATE":            []func(string, int){fct},
+		"CODEC":                    []func(string, int){fct},
+		"CHANNEL_CREATE":           []func(string, int){fct},
+		"CHANNEL_CALLSTATE":        []func(string, int){fct},
+		"API":                      []func(string, int){fct},
+		"CHANNEL_EXECUTE":          []func(string, int){fct},
+		"CHANNEL_EXECUTE_COMPLETE": []func(string, int){fct},
+		"CHANNEL_PARK":             []func(string, int){fct},
+		"CHANNEL_HANGUP":           []func(string, int){fct},
+		"CHANNEL_HANGUP_COMPLETE":  []func(string, int){fct},
+		"CHANNEL_UNPARK":           []func(string, int){fct},
+		"CHANNEL_DESTROY":          []func(string, int){fct},
 	}
 	expected := []string{"HEARTBEAT", "RE_SCHEDULE", "CHANNEL_STATE", "CODEC",
 		"CHANNEL_CREATE", "CHANNEL_CALLSTATE", "API", "CHANNEL_EXECUTE",
