@@ -468,7 +468,9 @@ func (self *FSock) doBackgroudJob(event string) { // add mutex protection
 	evMap := EventToMap(event)
 	jobUuid, has := evMap["Job-UUID"]
 	if !has {
-		self.logger.Err("<FSock> BACKGROUND_JOB with no Job-UUID")
+		if self.logger != nil {
+			self.logger.Err("<FSock> BACKGROUND_JOB with no Job-UUID")
+		}
 		return
 	}
 
@@ -477,7 +479,9 @@ func (self *FSock) doBackgroudJob(event string) { // add mutex protection
 	out, has = self.backgroundChans[jobUuid]
 	self.fsMutex.RUnlock()
 	if !has {
-		self.logger.Err(fmt.Sprintf("<FSock> BACKGROUND_JOB with UUID %s lost!", jobUuid))
+		if self.logger != nil {
+			self.logger.Err(fmt.Sprintf("<FSock> BACKGROUND_JOB with UUID %s lost!", jobUuid))
+		}
 		return // not a requested bgapi
 	}
 
