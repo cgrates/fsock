@@ -48,11 +48,11 @@ func TestHeaders(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating pype!")
 	}
-	FS = &FSock{}
-	FS.fsMutex = new(sync.RWMutex)
-	FS.buffer = bufio.NewReader(r)
+	fs := &FSock{}
+	fs.fsMutex = new(sync.RWMutex)
+	fs.buffer = bufio.NewReader(r)
 	w.Write([]byte(HEADER))
-	h, err := FS.readHeaders()
+	h, err := fs.readHeaders()
 	if err != nil || h != "Content-Length: 564\nContent-Type: text/event-plain\n" {
 		t.Error("Error parsing headers: ", h, err)
 	}
@@ -63,11 +63,11 @@ func TestEvent(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating pype!")
 	}
-	FS = &FSock{}
-	FS.fsMutex = new(sync.RWMutex)
-	FS.buffer = bufio.NewReader(r)
+	fs := &FSock{}
+	fs.fsMutex = new(sync.RWMutex)
+	fs.buffer = bufio.NewReader(r)
 	w.Write([]byte(HEADER + BODY))
-	h, b, err := FS.readEvent()
+	h, b, err := fs.readEvent()
 	if err != nil || h != HEADER[:len(HEADER)-1] || len(b) != 564 {
 		t.Error("Error parsing event: ", h, b, len(b))
 	}
@@ -90,26 +90,26 @@ func TestReadEvents(t *testing.T) {
 		funcMutex.Unlock()
 	}
 
-	FS = &FSock{}
-	FS.fsMutex = new(sync.RWMutex)
-	FS.buffer = bufio.NewReader(r)
-	FS.eventHandlers = map[string][]func(string, int){
-		"HEARTBEAT":                []func(string, int){evfunc},
-		"RE_SCHEDULE":              []func(string, int){evfunc},
-		"CHANNEL_STATE":            []func(string, int){evfunc},
-		"CODEC":                    []func(string, int){evfunc},
-		"CHANNEL_CREATE":           []func(string, int){evfunc},
-		"CHANNEL_CALLSTATE":        []func(string, int){evfunc},
-		"API":                      []func(string, int){evfunc},
-		"CHANNEL_EXECUTE":          []func(string, int){evfunc},
-		"CHANNEL_EXECUTE_COMPLETE": []func(string, int){evfunc},
-		"CHANNEL_PARK":             []func(string, int){evfunc},
-		"CHANNEL_HANGUP":           []func(string, int){evfunc},
-		"CHANNEL_HANGUP_COMPLETE":  []func(string, int){evfunc},
-		"CHANNEL_UNPARK":           []func(string, int){evfunc},
-		"CHANNEL_DESTROY":          []func(string, int){evfunc},
+	fs := &FSock{logger: nopLogger{}}
+	fs.fsMutex = new(sync.RWMutex)
+	fs.buffer = bufio.NewReader(r)
+	fs.eventHandlers = map[string][]func(string, int){
+		"HEARTBEAT":                {evfunc},
+		"RE_SCHEDULE":              {evfunc},
+		"CHANNEL_STATE":            {evfunc},
+		"CODEC":                    {evfunc},
+		"CHANNEL_CREATE":           {evfunc},
+		"CHANNEL_CALLSTATE":        {evfunc},
+		"API":                      {evfunc},
+		"CHANNEL_EXECUTE":          {evfunc},
+		"CHANNEL_EXECUTE_COMPLETE": {evfunc},
+		"CHANNEL_PARK":             {evfunc},
+		"CHANNEL_HANGUP":           {evfunc},
+		"CHANNEL_HANGUP_COMPLETE":  {evfunc},
+		"CHANNEL_UNPARK":           {evfunc},
+		"CHANNEL_DESTROY":          {evfunc},
 	}
-	go FS.readEvents()
+	go fs.readEvents()
 	w.Write(data)
 	time.Sleep(50 * time.Millisecond)
 	funcMutex.RLock()

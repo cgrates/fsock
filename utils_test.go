@@ -10,11 +10,12 @@ package fsock
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
 
-func TestindexStringAll(t *testing.T) {
+func TestIndexStringAll(t *testing.T) {
 	testStr := "a,b,c"
 	if indxAll := indexStringAll(testStr, ","); !reflect.DeepEqual([]int{1, 3}, indxAll) {
 		t.Errorf("Expected %+v, received: %+v", []int{1, 3}, indxAll)
@@ -112,22 +113,22 @@ eacd0ae4-e1d5-447d-a7aa-e422a3a7abad,outbound,2014-10-26 18:08:32,1414343312,sof
 4 total.
 `
 	eChanData := []map[string]string{
-		map[string]string{"application": "", "call_uuid": "fed464b3-a328-453f-9437-92b9b6a400fd", "direction": "inbound", "name": "sofia/ipbxas/dan@172.16.254.66", "application_data": "", "callstate": "HELD",
+		{"application": "", "call_uuid": "fed464b3-a328-453f-9437-92b9b6a400fd", "direction": "inbound", "name": "sofia/ipbxas/dan@172.16.254.66", "application_data": "", "callstate": "HELD",
 			"created": "2014-10-26 18:08:32", "cid_num": "dan", "dialplan": "XML", "read_bit_rate": "64000", "hostname": "iPBXDev", "callee_num": "", "created_epoch": "1414343312", "dest": "+4986517174963",
 			"write_codec": "PCMA", "presence_data": "", "callee_direction": "", "sent_callee_num": "", "uuid": "fed464b3-a328-453f-9437-92b9b6a400fd", "state": "CS_EXECUTE", "ip_addr": "172.16.254.66",
 			"cid_name": "dan", "write_rate": "8000", "write_bit_rate": "64000", "callee_name": "", "context": "ipbxas", "read_codec": "PCMA", "read_rate": "8000", "secure": "",
 			"presence_id": "dan@172.16.254.66", "sent_callee_name": ""},
-		map[string]string{"application": "playback", "call_uuid": "fed464b3-a328-453f-9437-92b9b6a400fd", "direction": "outbound", "name": "sofia/ipbxas/dan@172.16.254.66", "application_data": "local_stream://moh",
+		{"application": "playback", "call_uuid": "fed464b3-a328-453f-9437-92b9b6a400fd", "direction": "outbound", "name": "sofia/ipbxas/dan@172.16.254.66", "application_data": "local_stream://moh",
 			"callstate": "ACTIVE", "created": "2014-10-26 18:08:32", "cid_num": "+4986517174963", "dialplan": "XML", "read_bit_rate": "64000", "hostname": "iPBXDev", "callee_num": "dan", "created_epoch": "1414343312",
 			"dest": "dan", "write_codec": "PCMA", "presence_data": "", "callee_direction": "", "sent_callee_num": "", "uuid": "c56125cc-024a-48a2-adbc-9612f6c02334", "state": "CS_EXCHANGE_MEDIA",
 			"ip_addr": "172.16.254.66", "cid_name": "dan", "write_rate": "8000", "write_bit_rate": "64000", "callee_name": "Outbound Call", "context": "ipbxas", "read_codec": "PCMA", "read_rate": "8000",
 			"secure": "", "presence_id": "dan@172.16.254.66", "sent_callee_name": ""},
-		map[string]string{"dialplan": "XML", "read_codec": "PCMA", "secure": "", "hostname": "iPBXDev", "callstate": "ACTIVE", "callee_num": "dan", "sent_callee_name": "Outbound Call", "created_epoch": "1414343312",
+		{"dialplan": "XML", "read_codec": "PCMA", "secure": "", "hostname": "iPBXDev", "callstate": "ACTIVE", "callee_num": "dan", "sent_callee_name": "Outbound Call", "created_epoch": "1414343312",
 			"application": "bridge", "write_codec": "PCMA", "write_rate": "8000", "presence_data": "", "call_uuid": "e604a792-172a-4e8f-8fc9-9198f0d15f15", "uuid": "e604a792-172a-4e8f-8fc9-9198f0d15f15", "cid_num": "+4986517174963",
 			"application_data": "[sip_h_X-EpTransport=udp]sofia/ipbxas/dan@172.16.254.1:5060;registering_acc=172_16_254_66;fs_path=sip:172.16.254.66", "created": "2014-10-26 18:08:32", "dest": "dan", "direction": "inbound",
 			"state": "CS_EXECUTE", "ip_addr": "127.0.0.1", "cid_name": "dan", "write_bit_rate": "64000", "sent_callee_num": "dan", "name": "sofia/loop_ipbxas/+4986517174963@172.16.254.66", "context": "redirected",
 			"read_rate": "8000", "read_bit_rate": "64000", "presence_id": "", "callee_name": "Outbound Call", "callee_direction": "SEND"},
-		map[string]string{"direction": "outbound", "state": "CS_EXCHANGE_MEDIA", "ip_addr": "127.0.0.1", "cid_name": "dan", "write_bit_rate": "64000", "sent_callee_num": "+4986517174963", "name": "sofia/ipbxas/dan@172.16.254.1:5060",
+		{"direction": "outbound", "state": "CS_EXCHANGE_MEDIA", "ip_addr": "127.0.0.1", "cid_name": "dan", "write_bit_rate": "64000", "sent_callee_num": "+4986517174963", "name": "sofia/ipbxas/dan@172.16.254.1:5060",
 			"context": "redirected", "read_rate": "8000", "read_bit_rate": "64000", "presence_id": "", "callee_name": "Outbound Call", "callee_direction": "SEND", "dialplan": "XML", "read_codec": "PCMA", "secure": "",
 			"hostname": "iPBXDev", "callstate": "ACTIVE", "callee_num": "dan", "sent_callee_name": "dan", "created_epoch": "1414343312", "application": "", "write_codec": "PCMA", "write_rate": "8000", "presence_data": "",
 			"call_uuid": "e604a792-172a-4e8f-8fc9-9198f0d15f15", "uuid": "eacd0ae4-e1d5-447d-a7aa-e422a3a7abad", "cid_num": "+4986517174963", "application_data": "", "created": "2014-10-26 18:08:32", "dest": "dan"},
@@ -147,19 +148,19 @@ d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sof
 4 total.
 `
 	eChanData := []map[string]string{
-		map[string]string{"created_epoch": "1414402211", "application": "bridge", "write_codec": "PCMA", "write_rate": "8000", "presence_data": "", "call_uuid": "ba23506f-e36b-4c12-9c17-9146077bb240", "uuid": "ba23506f-e36b-4c12-9c17-9146077bb240", "cid_num": "dan",
+		{"created_epoch": "1414402211", "application": "bridge", "write_codec": "PCMA", "write_rate": "8000", "presence_data": "", "call_uuid": "ba23506f-e36b-4c12-9c17-9146077bb240", "uuid": "ba23506f-e36b-4c12-9c17-9146077bb240", "cid_num": "dan",
 			"application_data": "{sip_contact_user=iPBXSuite}[origination_caller_id_number=+4986517174963,to_domain_tag=172.16.254.66,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=dan,sip_h_X-ForwardedCall=false,presence_id=dan@172.16.254.66,leg_progress_timeout=50,leg_timeout=100,to_ep_type=SIP,to_ep_tag=dan,sip_h_X-CalledDomainTag=172.16.254.66,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/dan@172.16.254.66;fs_path=sip:127.0.0.1",
 			"created":          "2014-10-27 10:30:11", "dest": "+4986517174963", "direction": "inbound", "state": "CS_EXECUTE", "ip_addr": "172.16.254.66", "cid_name": "dan", "write_bit_rate": "64000", "sent_callee_num": "", "name": "sofia/ipbxas/dan@172.16.254.66", "context": "ipbxas", "read_rate": "8000",
 			"read_bit_rate": "64000", "presence_id": "dan@172.16.254.66", "callee_name": "", "callee_direction": "", "dialplan": "XML", "read_codec": "PCMA", "secure": "", "hostname": "iPBXDev", "callstate": "ACTIVE", "callee_num": "", "sent_callee_name": ""},
-		map[string]string{"state": "CS_EXCHANGE_MEDIA", "dialplan": "XML", "read_codec": "PCMA", "secure": "", "hostname": "iPBXDev", "callstate": "ACTIVE", "callee_num": "dan", "write_codec": "PCMA", "write_bit_rate": "64000",
+		{"state": "CS_EXCHANGE_MEDIA", "dialplan": "XML", "read_codec": "PCMA", "secure": "", "hostname": "iPBXDev", "callstate": "ACTIVE", "callee_num": "dan", "write_codec": "PCMA", "write_bit_rate": "64000",
 			"call_uuid": "ba23506f-e36b-4c12-9c17-9146077bb240", "context": "ipbxas", "read_rate": "8000", "read_bit_rate": "64000", "presence_id": "dan@172.16.254.66", "created": "2014-10-27 10:30:11", "dest": "dan", "callee_name": "Outbound Call",
 			"callee_direction": "", "direction": "outbound", "ip_addr": "172.16.254.66", "sent_callee_name": "", "created_epoch": "1414402211", "cid_name": "dan", "application": "", "write_rate": "8000", "presence_data": "", "sent_callee_num": "",
 			"uuid": "d775e082-4309-4629-b08a-ae174271f2e1", "name": "sofia/ipbxas/dan@172.16.254.66", "cid_num": "+4986517174963", "application_data": ""},
-		map[string]string{"cid_name": "dan", "write_rate": "8000", "write_bit_rate": "64000", "callee_name": "Outbound Call", "context": "redirected", "read_codec": "PCMA", "read_rate": "8000", "secure": "", "presence_id": "", "sent_callee_name": "Outbound Call",
+		{"cid_name": "dan", "write_rate": "8000", "write_bit_rate": "64000", "callee_name": "Outbound Call", "context": "redirected", "read_codec": "PCMA", "read_rate": "8000", "secure": "", "presence_id": "", "sent_callee_name": "Outbound Call",
 			"application": "playback", "call_uuid": "7c6a423e-7d2d-40c3-8f7f-06dc534d6576", "direction": "inbound", "name": "sofia/loop_ipbxas/+4986517174963@172.16.254.66", "application_data": "local_stream://moh", "callstate": "ACTIVE", "created": "2014-10-27 10:30:11",
 			"cid_num": "+4986517174963", "dialplan": "XML", "read_bit_rate": "64000", "hostname": "iPBXDev", "callee_num": "dan", "created_epoch": "1414402211", "dest": "dan", "write_codec": "PCMA", "presence_data": "", "callee_direction": "SEND", "sent_callee_num": "dan",
 			"uuid": "7c6a423e-7d2d-40c3-8f7f-06dc534d6576", "state": "CS_EXECUTE", "ip_addr": "127.0.0.1"},
-		map[string]string{"ip_addr": "127.0.0.1", "application_data": "", "cid_name": "dan", "cid_num": "+4986517174963", "read_codec": "PCMA", "read_bit_rate": "64000", "secure": "", "created_epoch": "1414402211", "presence_data": "", "callee_direction": "SEND",
+		{"ip_addr": "127.0.0.1", "application_data": "", "cid_name": "dan", "cid_num": "+4986517174963", "read_codec": "PCMA", "read_bit_rate": "64000", "secure": "", "created_epoch": "1414402211", "presence_data": "", "callee_direction": "SEND",
 			"call_uuid": "7c6a423e-7d2d-40c3-8f7f-06dc534d6576", "uuid": "81a05714-5a89-4a1c-848c-5e592527ae03", "direction": "outbound", "name": "sofia/ipbxas/dan@172.16.254.1:5060", "state": "CS_EXCHANGE_MEDIA", "callstate": "HELD", "created": "2014-10-27 10:30:11",
 			"write_rate": "8000", "write_bit_rate": "64000", "callee_name": "Outbound Call", "dialplan": "XML", "context": "redirected", "read_rate": "8000", "hostname": "iPBXDev", "presence_id": "", "callee_num": "dan", "sent_callee_name": "dan", "dest": "dan",
 			"application": "", "write_codec": "PCMA", "sent_callee_num": "+4986517174963"},
@@ -179,22 +180,22 @@ e657365d-c51b-4487-85f8-188c0771664e,inbound,2014-11-19 12:05:13,1416395113,sofi
 4 total.
 `
 	eChanData := []map[string]string{
-		map[string]string{"uuid": "8009b347-fe46-4c99-9bb8-89e52e05d35f", "direction": "inbound", "created": "2014-11-19 12:05:13", "created_epoch": "1416395113", "name": "sofia/ipbxas/+4986517174963@1.2.3.4", "state": "CS_EXECUTE",
+		{"uuid": "8009b347-fe46-4c99-9bb8-89e52e05d35f", "direction": "inbound", "created": "2014-11-19 12:05:13", "created_epoch": "1416395113", "name": "sofia/ipbxas/+4986517174963@1.2.3.4", "state": "CS_EXECUTE",
 			"cid_name": "004986517174963", "cid_num": "+4986517174963", "ip_addr": "2.3.4.5", "dest": "0049850210795", "application": "bridge",
 			"application_data": "{sip_contact_user=CloudIPBX.com,bridge_early_media=true}[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user3,sip_h_X-ForwardedCall=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user3,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-Billable=false,max_forwards=50]sofia/ipbxas/user3@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp,[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user4,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user4,max_forwards=50]sofia/ipbxas/user4@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp",
 			"dialplan":         "XML", "context": "ipbxas", "read_codec": "PCMA", "read_rate": "8000", "read_bit_rate": "64000", "write_codec": "PCMA", "write_rate": "8000", "write_bit_rate": "64000", "secure": "", "hostname": "nl-asd-dev-sbc01",
 			"presence_id": "+4986517174963@1.2.3.4", "presence_data": "", "callstate": "ACTIVE", "callee_name": "", "callee_num": "", "callee_direction": "", "call_uuid": "8009b347-fe46-4c99-9bb8-89e52e05d35f", "sent_callee_name": "",
 			"sent_callee_num": "", "initial_cid_name": "004986517174963", "initial_cid_num": "+4986517174963", "initial_ip_addr": "2.3.4.5", "initial_dest": "0049850210795", "initial_dialplan": "XML", "initial_context": "ipbxas"},
-		map[string]string{"direction": "outbound", "sent_callee_name": "", "application": "", "secure": "", "callstate": "ACTIVE", "call_uuid": "8009b347-fe46-4c99-9bb8-89e52e05d35f", "initial_dialplan": "XML", "name": "sofia/ipbxas/user3@sip.test.cloudipbx.com", "ip_addr": "2.3.4.5",
+		{"direction": "outbound", "sent_callee_name": "", "application": "", "secure": "", "callstate": "ACTIVE", "call_uuid": "8009b347-fe46-4c99-9bb8-89e52e05d35f", "initial_dialplan": "XML", "name": "sofia/ipbxas/user3@sip.test.cloudipbx.com", "ip_addr": "2.3.4.5",
 			"context": "ipbxas", "read_codec": "PCMA", "callee_num": "user3", "initial_cid_name": "004986517174963", "initial_dest": "user3", "uuid": "91f198d3-3e4d-4885-b2f7-fd58865fa9a5", "cid_num": "+4986517174963", "dest": "user3", "dialplan": "XML", "read_rate": "8000", "write_rate": "8000",
 			"write_bit_rate": "64000", "presence_id": "", "created": "2014-11-19 12:05:13", "cid_name": "004986517174963", "presence_data": "", "callee_name": "Outbound Call", "initial_cid_num": "+4986517174963", "initial_context": "ipbxas", "state": "CS_EXCHANGE_MEDIA", "callee_direction": "",
 			"created_epoch": "1416395113", "application_data": "", "read_bit_rate": "64000", "write_codec": "PCMA", "hostname": "nl-asd-dev-sbc01", "sent_callee_num": "", "initial_ip_addr": "2.3.4.5"},
-		map[string]string{"dialplan": "XML", "write_codec": "PCMA", "presence_id": "", "callee_direction": "SEND", "created": "2014-11-19 12:05:13", "read_rate": "8000", "secure": "", "sent_callee_name": "Outbound Call", "initial_ip_addr": "192.168.50.136", "name": "sofia/loop_ipbxas/+4986517174963@2.3.4.5",
+		{"dialplan": "XML", "write_codec": "PCMA", "presence_id": "", "callee_direction": "SEND", "created": "2014-11-19 12:05:13", "read_rate": "8000", "secure": "", "sent_callee_name": "Outbound Call", "initial_ip_addr": "192.168.50.136", "name": "sofia/loop_ipbxas/+4986517174963@2.3.4.5",
 			"context": "redirected", "write_bit_rate": "64000", "cid_name": "004986517174963", "presence_data": "", "callstate": "ACTIVE", "callee_name": "Outbound Call", "initial_dest": "user3", "direction": "inbound", "cid_num": "+4986517174963",
 			"application_data": "[sip_h_X-EpTransport=tls]sofia/ipbxas/user3@10.10.10.142:40268;alias=87.139.12.167~40268~3;registering_acc=sip_test_deanconnect_nl;fs_path=sip:2.3.4.5;transport=tcp", "read_bit_rate": "64000", "hostname": "nl-asd-dev-sbc01", "callee_num": "user3", "call_uuid": "e657365d-c51b-4487-85f8-188c0771664e",
 			"initial_context": "ipbxas_lo", "state": "CS_EXECUTE", "dest": "user3", "read_codec": "PCMA", "write_rate": "8000", "initial_cid_name": "004986517174963", "uuid": "e657365d-c51b-4487-85f8-188c0771664e", "created_epoch": "1416395113", "ip_addr": "192.168.50.136", "application": "bridge",
 			"sent_callee_num": "user3", "initial_cid_num": "+4986517174963", "initial_dialplan": "XML"},
-		map[string]string{"created_epoch": "1416395113", "cid_num": "+4986517174963", "application": "", "read_bit_rate": "64000", "callee_num": "user3", "initial_ip_addr": "192.168.50.136", "initial_dest": "user3", "name": "sofia/ipbxas/user3@10.10.10.142:40268", "ip_addr": "192.168.50.136",
+		{"created_epoch": "1416395113", "cid_num": "+4986517174963", "application": "", "read_bit_rate": "64000", "callee_num": "user3", "initial_ip_addr": "192.168.50.136", "initial_dest": "user3", "name": "sofia/ipbxas/user3@10.10.10.142:40268", "ip_addr": "192.168.50.136",
 			"application_data": "", "write_codec": "PCMA", "write_bit_rate": "64000", "presence_data": "", "callstate": "ACTIVE", "call_uuid": "e657365d-c51b-4487-85f8-188c0771664e", "sent_callee_name": "004986517174963", "direction": "outbound", "cid_name": "004986517174963", "write_rate": "8000",
 			"uuid": "2a7efd05-6f6f-400e-b319-4b8ff6a77a80", "context": "redirected", "callee_direction": "SEND", "state": "CS_EXCHANGE_MEDIA", "dest": "user3", "sent_callee_num": "+4986517174963", "created": "2014-11-19 12:05:13", "dialplan": "XML", "read_codec": "PCMA", "initial_cid_num": "+4986517174963",
 			"read_rate": "8000", "secure": "", "hostname": "nl-asd-dev-sbc01", "presence_id": "", "initial_cid_name": "004986517174963", "callee_name": "Outbound Call", "initial_dialplan": "XML", "initial_context": "redirected"},
@@ -223,7 +224,7 @@ f66a1563-3d86-4a93-914d-3f9436f830d2,inbound,2018-06-29 04:37:18,1530261438,sofi
 1 total.
 `
 	eChanData := []map[string]string{
-		map[string]string{"uuid": "f66a1563-3d86-4a93-914d-3f9436f830d2",
+		{"uuid": "f66a1563-3d86-4a93-914d-3f9436f830d2",
 			"direction": "inbound", "created": "2018-06-29 04:37:18",
 			"created_epoch": "1530261438", "name": "sofia/internal/1001@192.168.56.203", "state": "CS_EXECUTE",
 			"cid_name": "1001", "cid_num": "1001", "ip_addr": "192.168.56.2",
@@ -344,30 +345,33 @@ Content-Length: 342
 	}
 }
 
-func TestgetMapKeys(t *testing.T) {
+func TestGetMapKeys(t *testing.T) {
 	fct := func(string, int) {}
 	hMap := map[string][]func(string, int){
-		"HEARTBEAT":                []func(string, int){fct},
-		"RE_SCHEDULE":              []func(string, int){fct},
-		"CHANNEL_STATE":            []func(string, int){fct},
-		"CODEC":                    []func(string, int){fct},
-		"CHANNEL_CREATE":           []func(string, int){fct},
-		"CHANNEL_CALLSTATE":        []func(string, int){fct},
-		"API":                      []func(string, int){fct},
-		"CHANNEL_EXECUTE":          []func(string, int){fct},
-		"CHANNEL_EXECUTE_COMPLETE": []func(string, int){fct},
-		"CHANNEL_PARK":             []func(string, int){fct},
-		"CHANNEL_HANGUP":           []func(string, int){fct},
-		"CHANNEL_HANGUP_COMPLETE":  []func(string, int){fct},
-		"CHANNEL_UNPARK":           []func(string, int){fct},
-		"CHANNEL_DESTROY":          []func(string, int){fct},
+		"HEARTBEAT":                {fct},
+		"RE_SCHEDULE":              {fct},
+		"CHANNEL_STATE":            {fct},
+		"CODEC":                    {fct},
+		"CHANNEL_CREATE":           {fct},
+		"CHANNEL_CALLSTATE":        {fct},
+		"API":                      {fct},
+		"CHANNEL_EXECUTE":          {fct},
+		"CHANNEL_EXECUTE_COMPLETE": {fct},
+		"CHANNEL_PARK":             {fct},
+		"CHANNEL_HANGUP":           {fct},
+		"CHANNEL_HANGUP_COMPLETE":  {fct},
+		"CHANNEL_UNPARK":           {fct},
+		"CHANNEL_DESTROY":          {fct},
 	}
 	expected := []string{"HEARTBEAT", "RE_SCHEDULE", "CHANNEL_STATE", "CODEC",
 		"CHANNEL_CREATE", "CHANNEL_CALLSTATE", "API", "CHANNEL_EXECUTE",
 		"CHANNEL_EXECUTE_COMPLETE", "CHANNEL_PARK", "CHANNEL_HANGUP",
 		"CHANNEL_HANGUP_COMPLETE", "CHANNEL_UNPARK", "CHANNEL_DESTROY",
 	}
-	if rply := getMapKeys(hMap); !reflect.DeepEqual(expected, rply) {
+	rply := getMapKeys(hMap)
+	sort.Strings(expected)
+	sort.Strings(rply)
+	if !reflect.DeepEqual(expected, rply) {
 		t.Errorf("Expected: %s , recieved: %s", toJSON(expected), toJSON(rply))
 	}
 }
