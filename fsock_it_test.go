@@ -27,6 +27,8 @@ var FSTests = []func(*FSock, *testing.T){
 	testSendBgapiCmd,
 	testSendEventWithBody,
 	testSendEvent,
+	testFSockNewFSockNilLogger,
+	testFSockPushFSock,
 }
 
 func TestFSock(t *testing.T) {
@@ -144,3 +146,40 @@ func testSendEvent(fs *FSock, t *testing.T) {
 		t.Errorf("Event resonse wrong %s", rply)
 	}
 }
+
+func testFSockNewFSockNilLogger(fs *FSock, t *testing.T) {
+	fsaddr := "127.0.0.1:1234"
+	fpaswd := "pw"
+	noreconnects := 5
+	conID := 0
+	var l logger
+	evFilters := make(map[string][]string)
+	evHandlers := make(map[string][]func(string, int))
+
+	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, evHandlers, evFilters, l, conID)
+	errexp := "dial tcp 127.0.0.1:1234: connect: connection refused"
+
+	if err.Error() != errexp {
+		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", err, errexp)
+	}
+
+	if fs != nil {
+		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", fs, nil)
+	}
+}
+
+// func testFSockPushFSock(fs *FSock, t *testing.T) {
+// 	var fspool *FSockPool
+// 	fs = nil
+// 	fSocks := make(chan *FSock, 1)
+// 	allowedConns := make(chan struct{}, 1)
+// 	fspool = &FSockPool{
+// 		fSocks:       fSocks,
+// 		allowedConns: allowedConns,
+// 	}
+// 	fspool.PushFSock(fs)
+// 	if fs != nil {
+// 		t.Errorf("Expected nil, got %v", fs)
+// 	}
+// 	close(fSocks)
+// }
