@@ -27,8 +27,6 @@ var FSTests = []func(*FSock, *testing.T){
 	testSendBgapiCmd,
 	testSendEventWithBody,
 	testSendEvent,
-	testFSockNewFSockNilLogger,
-	testFSockPushFSock,
 }
 
 func TestFSock(t *testing.T) {
@@ -147,7 +145,7 @@ func testSendEvent(fs *FSock, t *testing.T) {
 	}
 }
 
-func testFSockNewFSockNilLogger(fs *FSock, t *testing.T) {
+func TestFSockNewFSockNilLogger(t *testing.T) {
 	fsaddr := "127.0.0.1:1234"
 	fpaswd := "pw"
 	noreconnects := 5
@@ -168,18 +166,54 @@ func testFSockNewFSockNilLogger(fs *FSock, t *testing.T) {
 	}
 }
 
-// func testFSockPushFSock(fs *FSock, t *testing.T) {
-// 	var fspool *FSockPool
-// 	fs = nil
-// 	fSocks := make(chan *FSock, 1)
-// 	allowedConns := make(chan struct{}, 1)
-// 	fspool = &FSockPool{
-// 		fSocks:       fSocks,
-// 		allowedConns: allowedConns,
+// func TestFSockAuthFailRead(t *testing.T) {
+// 	faddr := "127.0.0.1:8021"
+// 	fpass := "ClueCon"
+// 	noreconects := 10
+// 	conID := 0
+
+// 	l, errLog := syslog.New(syslog.LOG_INFO, "TestFSock")
+// 	if errLog != nil {
+// 		t.Fatal(errLog)
 // 	}
-// 	fspool.PushFSock(fs)
-// 	if fs != nil {
-// 		t.Errorf("Expected nil, got %v", fs)
+
+// 	evFilters := make(map[string][]string)
+// 	evHandlers := make(map[string][]func(string, int))
+
+// 	fs, err := NewFSock(faddr, fpass, noreconects, evHandlers, evFilters, l, conID)
+// 	if err != nil {
+// 		t.Fatal(err)
 // 	}
-// 	close(fSocks)
+// 	fs.conn = &connMock{}
+// 	fs.buffer = bufio.NewReader(&readerMock{})
+
+// 	err = fs.auth()
+// 	fmt.Println(err)
+// 	if err == nil || err != ErrConnectionPoolTimeout {
+// 		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", err, ErrConnectionPoolTimeout)
+// 	}
+// }
+
+// func TestFSockConnectAuthChg(t *testing.T) {
+
+// 	faddr := "127.0.0.1:8021"
+// 	fpass := "ClueCon"
+// 	noreconects := 10
+// 	conID := 0
+// 	l, errLog := syslog.New(syslog.LOG_INFO, "TestFSock")
+// 	if errLog != nil {
+// 		t.Fatal(errLog)
+// 	}
+// 	evFilters := make(map[string][]string)
+// 	evHandlers := make(map[string][]func(string, int))
+// 	sRdEv := make(chan struct{})
+// 	fs, err := NewFSock(faddr, fpass, noreconects, evHandlers, evFilters, l, conID)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	fs.stopReadEvents = sRdEv
+
+// 	err = fs.connect()
+// 	fmt.Println(err)
+
 // }

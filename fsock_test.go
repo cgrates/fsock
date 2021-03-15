@@ -9,8 +9,13 @@ package fsock
 
 import (
 	"bufio"
+	"bytes"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"net"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -46,7 +51,7 @@ extra data
 func TestHeaders(t *testing.T) {
 	r, w, err := os.Pipe()
 	if err != nil {
-		t.Error("Error creating pype!")
+		t.Error("Error creating pipe!")
 	}
 	fs := &FSock{}
 	fs.fsMutex = new(sync.RWMutex)
@@ -117,4 +122,202 @@ func TestReadEvents(t *testing.T) {
 		t.Error("Error reading events: ", events)
 	}
 	funcMutex.RUnlock()
+}
+
+func TestFSockConnect(t *testing.T) {
+	fs := &FSock{
+		fsMutex:        new(sync.RWMutex),
+		eventHandlers:  make(map[string][]func(string, int)),
+		eventFilters:   make(map[string][]string),
+		stopReadEvents: make(chan struct{}),
+		logger:         nopLogger{},
+	}
+
+	err := fs.Connect()
+	if err == nil {
+		t.Fatal("Expected non-nil error")
+	}
+
+}
+
+type connMock struct{}
+
+func (cM *connMock) Close() error {
+	return nil
+}
+
+func (cM *connMock) LocalAddr() net.Addr {
+	return nil
+}
+
+func (cM *connMock) RemoteAddr() net.Addr {
+	return nil
+}
+
+func (cM *connMock) Read(b []byte) (n int, err error) {
+	return 0, nil
+}
+
+func (cM *connMock) Write(b []byte) (n int, err error) {
+	return 0, ErrConnectionPoolTimeout
+}
+
+func (cM *connMock) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (cM *connMock) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (cM *connMock) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
+type connMock2 struct {
+	buf *bytes.Buffer
+}
+
+func (cM *connMock2) Close() error {
+	return nil
+}
+
+func (cM *connMock2) LocalAddr() net.Addr {
+	return nil
+}
+
+func (cM *connMock2) RemoteAddr() net.Addr {
+	return nil
+}
+
+func (cM *connMock2) Read(b []byte) (n int, err error) {
+	return 0, nil
+}
+
+func (cM *connMock2) Write(b []byte) (n int, err error) {
+	return cM.buf.Write(b)
+}
+
+func (cM *connMock2) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (cM *connMock2) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (cM *connMock2) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
+type connMock3 struct{}
+
+func (cM *connMock3) Close() error {
+	return nil
+}
+
+func (cM *connMock3) LocalAddr() net.Addr {
+	return nil
+}
+
+func (cM *connMock3) RemoteAddr() net.Addr {
+	return nil
+}
+
+func (cM *connMock3) Read(b []byte) (n int, err error) {
+	return 0, nil
+}
+
+func (cM *connMock3) Write(b []byte) (n int, err error) {
+	return 0, nil
+}
+
+func (cM *connMock3) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (cM *connMock3) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (cM *connMock3) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+func TestFSockSend(t *testing.T) {
+	fs := &FSock{
+		logger:  nopLogger{},
+		fsMutex: &sync.RWMutex{},
+		conn:    new(connMock),
+	}
+
+	expected := ErrConnectionPoolTimeout
+	err := fs.send("testString")
+
+	if err == nil || err != expected {
+		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", err, expected)
+	}
+}
+
+func TestFSockAuthFailSend(t *testing.T) {
+	fs := &FSock{
+		logger:  nopLogger{},
+		fsMutex: &sync.RWMutex{},
+		conn:    new(connMock),
+	}
+
+	err := fs.auth()
+
+	if err == nil || err != ErrConnectionPoolTimeout {
+		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", err, ErrConnectionPoolTimeout)
+	}
+}
+
+func TestFSockAuthFailReply(t *testing.T) {
+	buf := new(bytes.Buffer)
+	fs := &FSock{
+		fspaswd: "test",
+		conn:    &connMock2{buf: buf},
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted\n\n"))),
+		fsMutex: new(sync.RWMutex),
+		logger:  new(nopLogger),
+	}
+
+	expected := fmt.Sprintf("Unexpected auth reply received: <%s>", strings.TrimSuffix(HEADER, "\n"))
+	err := fs.auth()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedbuf := "auth test\n\n"
+	if rcv := buf.String(); rcv != expectedbuf {
+		t.Errorf("\nReceived: %q, \nExpected: %q", rcv, expectedbuf)
+	}
+
+	buf.Reset()
+	fs.buffer = bufio.NewReader(bytes.NewBuffer([]byte(HEADER)))
+	err = fs.auth()
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nReceived: %q, \nExpected: %q", err.Error(), expected)
+	}
+
+	if rcv := buf.String(); rcv != expectedbuf {
+		t.Errorf("\nReceived: %q, \nExpected: %q", rcv, expectedbuf)
+	}
+}
+
+func TestFSockAuthFailRead(t *testing.T) {
+	fs := &FSock{
+		fspaswd: "test",
+		fsMutex: &sync.RWMutex{},
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted"))),
+		logger:  new(nopLogger),
+		conn:    new(connMock3),
+	}
+	expected := io.EOF
+	err := fs.auth()
+
+	if err == nil || err != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
 }
