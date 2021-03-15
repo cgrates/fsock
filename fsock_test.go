@@ -321,3 +321,54 @@ func TestFSockAuthFailRead(t *testing.T) {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
 	}
 }
+
+func TestFSockSendBgapiCmdNonNilErr(t *testing.T) {
+	fs := &FSock{
+		fsMutex:         &sync.RWMutex{},
+		backgroundChans: make(map[string]chan string),
+	}
+
+	expected := "Not connected to FreeSWITCH"
+	_, err := fs.SendBgapiCmd("test")
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockSendMsgCmdWithBodyEmptyArguments(t *testing.T) {
+	fs := &FSock{}
+	uuid := ""
+	cmdargs := make(map[string]string)
+	body := ""
+
+	expected := "Need command arguments"
+	err := fs.SendMsgCmdWithBody(uuid, cmdargs, body)
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockSendMsgCmd(t *testing.T) {
+	fs := &FSock{}
+	uuid := "testID"
+	cmdargs := make(map[string]string)
+
+	expected := "Need command arguments"
+	err := fs.SendMsgCmd(uuid, cmdargs)
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockLocalAddrNotConnected(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+	}
+	addr := fs.LocalAddr()
+	if addr != nil {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, addr)
+	}
+}
