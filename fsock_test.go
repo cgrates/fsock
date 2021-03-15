@@ -254,7 +254,7 @@ func TestFSockSend(t *testing.T) {
 	err := fs.send("testString")
 
 	if err == nil || err != expected {
-		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", err, expected)
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
 	}
 }
 
@@ -268,7 +268,7 @@ func TestFSockAuthFailSend(t *testing.T) {
 	err := fs.auth()
 
 	if err == nil || err != ErrConnectionPoolTimeout {
-		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", err, ErrConnectionPoolTimeout)
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", ErrConnectionPoolTimeout, err)
 	}
 }
 
@@ -298,11 +298,11 @@ func TestFSockAuthFailReply(t *testing.T) {
 	err = fs.auth()
 
 	if err == nil || err.Error() != expected {
-		t.Errorf("\nReceived: %q, \nExpected: %q", err.Error(), expected)
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err.Error())
 	}
 
 	if rcv := buf.String(); rcv != expectedbuf {
-		t.Errorf("\nReceived: %q, \nExpected: %q", rcv, expectedbuf)
+		t.Errorf("\nExpected: %q, \nReceived: %q", expectedbuf, rcv)
 	}
 }
 

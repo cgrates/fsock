@@ -158,62 +158,10 @@ func TestFSockNewFSockNilLogger(t *testing.T) {
 	errexp := "dial tcp 127.0.0.1:1234: connect: connection refused"
 
 	if err.Error() != errexp {
-		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", err, errexp)
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", errexp, err)
 	}
 
 	if fs != nil {
-		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", fs, nil)
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, fs)
 	}
 }
-
-// func TestFSockAuthFailRead(t *testing.T) {
-// 	faddr := "127.0.0.1:8021"
-// 	fpass := "ClueCon"
-// 	noreconects := 10
-// 	conID := 0
-
-// 	l, errLog := syslog.New(syslog.LOG_INFO, "TestFSock")
-// 	if errLog != nil {
-// 		t.Fatal(errLog)
-// 	}
-
-// 	evFilters := make(map[string][]string)
-// 	evHandlers := make(map[string][]func(string, int))
-
-// 	fs, err := NewFSock(faddr, fpass, noreconects, evHandlers, evFilters, l, conID)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	fs.conn = &connMock{}
-// 	fs.buffer = bufio.NewReader(&readerMock{})
-
-// 	err = fs.auth()
-// 	fmt.Println(err)
-// 	if err == nil || err != ErrConnectionPoolTimeout {
-// 		t.Errorf("\nReceived: <%+v>, \nExpected: <%+v>", err, ErrConnectionPoolTimeout)
-// 	}
-// }
-
-// func TestFSockConnectAuthChg(t *testing.T) {
-
-// 	faddr := "127.0.0.1:8021"
-// 	fpass := "ClueCon"
-// 	noreconects := 10
-// 	conID := 0
-// 	l, errLog := syslog.New(syslog.LOG_INFO, "TestFSock")
-// 	if errLog != nil {
-// 		t.Fatal(errLog)
-// 	}
-// 	evFilters := make(map[string][]string)
-// 	evHandlers := make(map[string][]func(string, int))
-// 	sRdEv := make(chan struct{})
-// 	fs, err := NewFSock(faddr, fpass, noreconects, evHandlers, evFilters, l, conID)
-// 	if err != nil {
-// 		t.Fatal(err)
-// 	}
-// 	fs.stopReadEvents = sRdEv
-
-// 	err = fs.connect()
-// 	fmt.Println(err)
-
-// }
