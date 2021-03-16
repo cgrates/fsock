@@ -433,7 +433,7 @@ func (fs *FSock) filterEvents(filters map[string][]string) (err error) {
 func (fs *FSock) dispatchEvent(event string) {
 	eventName := headerVal(event, "Event-Name")
 	if eventName == "BACKGROUND_JOB" { // for bgapi BACKGROUND_JOB
-		go fs.doBackgroudJob(event)
+		go fs.doBackgroundJob(event)
 		return
 	}
 
@@ -457,7 +457,7 @@ func (fs *FSock) dispatchEvent(event string) {
 }
 
 // bgapi event lisen fuction
-func (fs *FSock) doBackgroudJob(event string) { // add mutex protection
+func (fs *FSock) doBackgroundJob(event string) { // add mutex protection
 	evMap := EventToMap(event)
 	jobUUID, has := evMap["Job-UUID"]
 	if !has {

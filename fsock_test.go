@@ -15,6 +15,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -370,5 +371,454 @@ func TestFSockLocalAddrNotConnected(t *testing.T) {
 	addr := fs.LocalAddr()
 	if addr != nil {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, addr)
+	}
+}
+
+func TestFSockReadEvents(t *testing.T) {
+	fs := &FSock{
+		fsMutex:        &sync.RWMutex{},
+		stopReadEvents: make(chan struct{}),
+		errReadEvents:  make(chan error, 1),
+	}
+
+	fs.errReadEvents <- io.EOF
+
+	expected := "Not connected to FreeSWITCH"
+	err := fs.ReadEvents()
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockReadBody(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+		logger:  nopLogger{},
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte(""))),
+	}
+	rply, err := fs.readBody(2)
+
+	if err == nil || err != io.EOF {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", io.EOF, err)
+	}
+
+	if rply != "" {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", "", rply)
+	}
+}
+
+func TestFSockSendCmdErrSend(t *testing.T) {
+	fs := &FSock{
+		fsMutex:    &sync.RWMutex{},
+		logger:     nopLogger{},
+		reconnects: 5,
+		conn:       &connMock{},
+	}
+	rply, err := fs.sendCmd("test")
+
+	if err == nil || err != ErrConnectionPoolTimeout {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", ErrConnectionPoolTimeout, err)
+	}
+
+	if rply != "" {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", "", rply)
+	}
+}
+
+func TestFSockSendCmdErrContains(t *testing.T) {
+	fs := &FSock{
+		fsMutex:    &sync.RWMutex{},
+		logger:     nopLogger{},
+		reconnects: 2,
+		conn:       &connMock3{},
+		cmdChan:    make(chan string, 1),
+	}
+
+	fs.cmdChan <- "test-ERR"
+
+	expected := "test-ERR"
+	rply, err := fs.sendCmd("test")
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+
+	if rply != "" {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", "", rply)
+	}
+
+}
+
+func TestFSockReconnectIfNeeded(t *testing.T) {
+	fs := &FSock{
+		fsMutex:    &sync.RWMutex{},
+		logger:     nopLogger{},
+		reconnects: 2,
+		delayFunc:  DelayFunc(),
+	}
+
+	expected := "dial tcp: missing address"
+	err := fs.ReconnectIfNeeded()
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockSendMsgCmdWithBody(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+	}
+	uuid := "testID"
+	cmdargs := map[string]string{
+		"testKey": "testValue",
+	}
+	body := "testBody"
+
+	expected := "Not connected to FreeSWITCH"
+	err := fs.SendMsgCmdWithBody(uuid, cmdargs, body)
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockLocalAddr(t *testing.T) {
+	fs := &FSock{
+		conn:    &connMock{},
+		fsMutex: &sync.RWMutex{},
+	}
+	addr := fs.LocalAddr()
+	if addr != nil {
+		t.Errorf("\nExpected nil, got %v", addr)
+	}
+}
+
+func TestFSockreadEvent(t *testing.T) {
+	fs := &FSock{
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte("Content-Length\n\n"))),
+		logger:  nopLogger{},
+		fsMutex: &sync.RWMutex{},
+	}
+
+	expected := fmt.Sprintf("Cannot extract content length because<%s>", "strconv.Atoi: parsing \"\": invalid syntax")
+	exphead := "Content-Length\n"
+	expbody := ""
+	head, body, err := fs.readEvent()
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+
+	if head != exphead {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", exphead, head)
+	}
+
+	if body != expbody {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expbody, body)
+	}
+}
+
+func TestFSockreadEventsStopRead(t *testing.T) {
+	// nothing to check only for coverage
+	fs := &FSock{
+		stopReadEvents: make(chan struct{}, 1),
+	}
+
+	close(fs.stopReadEvents)
+	fs.readEvents()
+}
+
+func TestFSockeventsPlainErrSend(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+		conn:    &connMock{},
+		logger:  nopLogger{},
+	}
+	events := []string{""}
+
+	expected := ErrConnectionPoolTimeout
+	err := fs.eventsPlain(events)
+
+	if err == nil || err != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockeventsPlainErrRead(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+		conn:    &connMock3{},
+		logger:  nopLogger{},
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte("test\n"))),
+	}
+	events := []string{"ALL"}
+
+	expected := io.EOF
+	err := fs.eventsPlain(events)
+
+	if err == nil || err != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockeventsPlainUnexpectedReply(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+		conn:    &connMock3{},
+		logger:  nopLogger{},
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte("test\n\n"))),
+	}
+	events := []string{"CUSTOMtest"}
+
+	expected := fmt.Sprintf("Unexpected events-subscribe reply received: <%s>", "test\n")
+	err := fs.eventsPlain(events)
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockfilterEventsUnexpectedReply(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+		conn:    &connMock3{},
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte("test\n\n"))),
+		logger:  nopLogger{},
+	}
+	filters := map[string][]string{
+		"Event-Name": nil,
+	}
+
+	expected := fmt.Sprintf("Unexpected filter-events reply received: <%s>", "test\n")
+	err := fs.filterEvents(filters)
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockfilterEventsErrRead(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+		conn:    &connMock3{},
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte("test\n"))),
+		logger:  nopLogger{},
+	}
+	filters := map[string][]string{
+		"Event-Name": nil,
+	}
+
+	expected := io.EOF
+	err := fs.filterEvents(filters)
+
+	if err == nil || err != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockfilterEventsErrSend(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+		conn:    &connMock{},
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte("test\n\n"))),
+		logger:  nopLogger{},
+	}
+	filters := map[string][]string{
+		"Event-Name": nil,
+	}
+
+	expected := ErrConnectionPoolTimeout
+	err := fs.filterEvents(filters)
+
+	if err == nil || err != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	}
+}
+
+func TestFSockfilterEventsErrNil(t *testing.T) {
+	fs := &FSock{
+		fsMutex: &sync.RWMutex{},
+		conn:    &connMock3{},
+		buffer:  bufio.NewReader(bytes.NewBuffer([]byte("testReply-Text: +OK\n\n"))),
+		logger:  nopLogger{},
+	}
+	filters := map[string][]string{
+		"Event-Name": nil,
+	}
+
+	err := fs.filterEvents(filters)
+
+	if err != nil {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, err)
+	}
+}
+
+type loggerMock struct {
+	msgType, msg string
+}
+
+func (lM *loggerMock) Alert(string) error {
+	return nil
+}
+
+func (lM *loggerMock) Close() error {
+	return nil
+}
+
+func (lM *loggerMock) Crit(string) error {
+	return nil
+}
+
+func (lM *loggerMock) Debug(string) error {
+	return nil
+}
+
+func (lM *loggerMock) Emerg(string) error {
+	return nil
+}
+
+func (lM *loggerMock) Err(s string) error {
+	lM.msgType = "error"
+	lM.msg = s
+	return nil
+}
+
+func (lM *loggerMock) Info(string) error {
+	return nil
+}
+
+func (lM *loggerMock) Notice(string) error {
+	return nil
+}
+
+func (lM *loggerMock) Warning(event string) error {
+	lM.msgType = "warning"
+	lM.msg = event
+	return nil
+}
+
+func TestFSockdispatchEvent(t *testing.T) {
+	l := &loggerMock{}
+	fs := &FSock{
+		logger: l,
+	}
+	event := "Event-Name: CUSTOM\n"
+	event += "Event-Subclass: test"
+
+	expected := fmt.Sprintf("<FSock> No dispatcher for event: <%+v> with event name: %s", event, "CUSTOM test")
+	fs.dispatchEvent(event)
+
+	if l.msgType != "warning" {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", "warning", l.msgType)
+	} else if l.msg != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, l.msg)
+	}
+}
+
+func TestFSockdoBackgroundJobLogErr1(t *testing.T) {
+	l := &loggerMock{}
+	fs := &FSock{
+		logger: l,
+	}
+	event := "test"
+	expected := "<FSock> BACKGROUND_JOB with no Job-UUID"
+	fs.doBackgroundJob(event)
+
+	if l.msgType != "error" {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", "error", l.msgType)
+	} else if l.msg != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, l.msg)
+	}
+}
+
+func TestFSockdoBackgroundJobLogErr2(t *testing.T) {
+	l := &loggerMock{}
+	fs := &FSock{
+		logger:  l,
+		fsMutex: &sync.RWMutex{},
+	}
+	event := "Event-Name: CUSTOM\n"
+	event += "Event-Subclass: test\n"
+	event += "Job-UUID: testID"
+
+	expected := fmt.Sprintf("<FSock> BACKGROUND_JOB with UUID %s lost!", "testID")
+	fs.doBackgroundJob(event)
+
+	if l.msgType != "error" {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", "error", l.msgType)
+	} else if l.msg != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, l.msg)
+	}
+}
+
+func TestFSockNewFSockPool(t *testing.T) {
+	fsaddr := "testAddr"
+	fspw := "testPw"
+	reconns := 2
+	connIdx := 0
+	maxFSocks := 1
+
+	var maxWait time.Duration
+
+	evHandlers := make(map[string][]func(string, int))
+	evFilters := make(map[string][]string)
+
+	fspool := &FSockPool{
+		connIdx:       connIdx,
+		fsAddr:        fsaddr,
+		fsPasswd:      fspw,
+		reconnects:    reconns,
+		maxWaitConn:   maxWait,
+		eventHandlers: evHandlers,
+		eventFilters:  evFilters,
+		logger:        nopLogger{},
+		allowedConns:  nil,
+		fSocks:        nil,
+	}
+	fsnew := NewFSockPool(maxFSocks, fsaddr, fspw, reconns, maxWait, evHandlers, evFilters, nil, connIdx)
+	fsnew.allowedConns = nil
+	fsnew.fSocks = nil
+
+	if !reflect.DeepEqual(fspool, fsnew) {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", fspool, fsnew)
+	}
+}
+
+func TestFSockPushFSock1(t *testing.T) {
+	// nothing to check
+	var fs *FSockPool
+	fsk := &FSock{}
+	fs.PushFSock(fsk)
+}
+
+func TestFSockPushFSock2(t *testing.T) {
+	var fs *FSockPool
+	var fsk *FSock
+	fs.PushFSock(fsk)
+
+	fs = &FSockPool{
+		allowedConns: make(chan struct{}, 3),
+	}
+
+	fs.PushFSock(fsk)
+	if len(fs.allowedConns) != 1 {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", 1, len(fs.allowedConns))
+	}
+}
+
+func TestFSockPushFSock3(t *testing.T) {
+	fs := &FSockPool{
+		allowedConns: make(chan struct{}, 1),
+		fSocks:       make(chan *FSock, 1),
+	}
+	fsk := &FSock{
+		fsMutex: &sync.RWMutex{},
+		conn:    &connMock{},
+	}
+	fs.PushFSock(fsk)
+	if len(fs.fSocks) != 1 {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", 1, len(fs.fSocks))
+	} else if rcv := <-fs.fSocks; !reflect.DeepEqual(rcv, fsk) {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", fsk, rcv)
 	}
 }
