@@ -192,7 +192,10 @@ func TestFSockconnect(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		conn.Write([]byte("not valid"))
+		_, err = conn.Write([]byte("not valid"))
+		if err != nil {
+			t.Error(err)
+		}
 		conn.Close()
 	}()
 	experr1 := "Received error<EOF> when receiving the auth challenge"
@@ -205,7 +208,10 @@ func TestFSockconnect(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		conn.Write([]byte("not valid\n\n"))
+		_, err = conn.Write([]byte("not valid\n\n"))
+		if err != nil {
+			t.Error(err)
+		}
 		conn.Close()
 	}()
 	experr2 := "No auth challenge received"
@@ -218,11 +224,24 @@ func TestFSockconnect(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		conn.Write([]byte("Content-Type: auth/request\n\n"))
+		_, err = conn.Write([]byte("Content-Type: auth/request\n\n"))
+		if err != nil {
+			t.Error(err)
+		}
 		c := make([]byte, 512)
-		conn.Read(c)
-		conn.Write([]byte("Content-Type: command/reply\nReply-Text:  accepted\n\n"))
-		// conn.Write([]byte("Content-Type: command/reply\nReply-Text: +OK accepted\n\n"))
+		expread := "auth pass"
+		n, err := conn.Read(c)
+		if err != nil {
+			t.Error(err)
+		}
+		rpl := strings.TrimSpace(string(c[:n]))
+		if expread != rpl {
+			t.Errorf("\nExpected: %q, \nReceived: %q", expread, rpl)
+		}
+		_, err = conn.Write([]byte("Content-Type: command/reply\nReply-Text:  accepted\n\n"))
+		if err != nil {
+			t.Error(err)
+		}
 		conn.Close()
 	}()
 	experr3 := "Unexpected auth reply received: <Content-Type: command/reply\nReply-Text:  accepted\n>"
@@ -236,13 +255,38 @@ func TestFSockconnect(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		conn.Write([]byte("Content-Type: auth/request\n\n"))
+		_, err = conn.Write([]byte("Content-Type: auth/request\n\n"))
+		if err != nil {
+			t.Error(err)
+		}
 		c := make([]byte, 512)
-		conn.Read(c)
-		conn.Write([]byte("Content-Type: command/reply\nReply-Text: +OK accepted\n\n"))
+		expread := "auth pass"
+		n, err := conn.Read(c)
+		if err != nil {
+			t.Error(err)
+		}
+		rpl := strings.TrimSpace(string(c[:n]))
+		if expread != rpl {
+			t.Errorf("\nExpected: %q, \nReceived: %q", expread, rpl)
+		}
+		_, err = conn.Write([]byte("Content-Type: command/reply\nReply-Text: +OK accepted\n\n"))
+		if err != nil {
+			t.Error(err)
+		}
 		c = make([]byte, 512)
-		conn.Read(c)
-		conn.Write([]byte("not valid"))
+		expread = "filter Event-Name CUSTOM"
+		n, err = conn.Read(c)
+		if err != nil {
+			t.Error(err)
+		}
+		rpl = strings.TrimSpace(string(c[:n]))
+		if expread != rpl {
+			t.Errorf("\nExpected: %q, \nReceived: %q", expread, rpl)
+		}
+		_, err = conn.Write([]byte("not valid"))
+		if err != nil {
+			t.Error(err)
+		}
 		conn.Close()
 	}()
 	experr4 := "EOF"
@@ -257,13 +301,38 @@ func TestFSockconnect(t *testing.T) {
 			t.Error(err)
 			return
 		}
-		conn.Write([]byte("Content-Type: auth/request\n\n"))
+		_, err = conn.Write([]byte("Content-Type: auth/request\n\n"))
+		if err != nil {
+			t.Error(err)
+		}
 		c := make([]byte, 512)
-		conn.Read(c)
-		conn.Write([]byte("Content-Type: command/reply\nReply-Text: +OK accepted\n\n"))
+		expread := "auth pass"
+		n, err := conn.Read(c)
+		if err != nil {
+			t.Error(err)
+		}
+		rpl := strings.TrimSpace(string(c[:n]))
+		if expread != rpl {
+			t.Errorf("\nExpected: %q, \nReceived: %q", expread, rpl)
+		}
+		_, err = conn.Write([]byte("Content-Type: command/reply\nReply-Text: +OK accepted\n\n"))
+		if err != nil {
+			t.Error(err)
+		}
 		c = make([]byte, 512)
-		conn.Read(c)
-		conn.Write([]byte("not valid"))
+		expread = "event plain all"
+		n, err = conn.Read(c)
+		if err != nil {
+			t.Error(err)
+		}
+		rpl = strings.TrimSpace(string(c[:n]))
+		if expread != rpl {
+			t.Errorf("\nExpected: %q, \nReceived: %q", expread, rpl)
+		}
+		_, err = conn.Write([]byte("not valid"))
+		if err != nil {
+			t.Error(err)
+		}
 		conn.Close()
 	}()
 	experr5 := "EOF"
