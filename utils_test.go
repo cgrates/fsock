@@ -384,3 +384,165 @@ func BenchmarkHeaderVal(b *testing.B) {
 		headerVal(BODY, "Event-Date-Loca")
 	}
 }
+
+func TestUtilsHeaderValNotFound(t *testing.T) {
+	hdrs := "test: value"
+	hdr := "fail"
+	expected := ""
+	received := headerVal(hdrs, hdr)
+	if received != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, received)
+	}
+}
+
+func TestUtilsSplitIgnoreGroupsEmptyStr(t *testing.T) {
+	origStr := ""
+	sep := ""
+	expected := make([]string, 0)
+	received := splitIgnoreGroups(origStr, sep)
+	if !reflect.DeepEqual(expected, received) {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, received)
+	}
+}
+
+func TestUtilsSplitIgnoreGroupsEmptySep(t *testing.T) {
+	origStr := "testString"
+	sep := ""
+	expected := []string{"testString"}
+	received := splitIgnoreGroups(origStr, sep)
+	if !reflect.DeepEqual(expected, received) {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, received)
+	}
+}
+
+func TestUtilsSplitIgnoreGroups1(t *testing.T) {
+	origStr := "test:String"
+	sep := ":"
+
+	expected := []string{origStr}
+	received := splitIgnoreGroups(origStr, sep)
+
+	if !reflect.DeepEqual(expected, received) {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, received)
+	}
+}
+
+func TestUtilsToJSON(t *testing.T) {
+	m := map[string]int{
+		"testKey1": 1,
+		"testKey2": 2,
+	}
+	expected := "{\"testKey1\":1,\"testKey2\":2}"
+	received := toJSON(m)
+	if expected != received {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, received)
+	}
+}
+
+func TestUtilsNopLoggerAlert(t *testing.T) {
+	var l nopLogger
+	err := l.Alert("alert")
+	if err != nil {
+		t.Errorf("\nExpected nil, received <%+v>", err)
+	}
+}
+
+func TestUtilsNopLoggerClose(t *testing.T) {
+	var l nopLogger
+	err := l.Close()
+	if err != nil {
+		t.Errorf("\nExpected nil, received <%+v>", err)
+	}
+}
+
+func TestUtilsNopLoggerCrit(t *testing.T) {
+	var l nopLogger
+	err := l.Crit("crit")
+	if err != nil {
+		t.Errorf("\nExpected nil, received <%+v>", err)
+	}
+}
+
+func TestUtilsNopLoggerDebug(t *testing.T) {
+	var l nopLogger
+	err := l.Debug("debug")
+	if err != nil {
+		t.Errorf("\nExpected nil, received <%+v>", err)
+	}
+}
+
+func TestUtilsNopLoggerEmerg(t *testing.T) {
+	var l nopLogger
+	err := l.Emerg("emerg")
+	if err != nil {
+		t.Errorf("\nExpected nil, received <%+v>", err)
+	}
+}
+
+func TestUtilsNopLoggerErr(t *testing.T) {
+	var l nopLogger
+	err := l.Err("err")
+	if err != nil {
+		t.Errorf("\nExpected nil, received <%+v>", err)
+	}
+}
+
+func TestUtilsNopLoggerInfo(t *testing.T) {
+	var l nopLogger
+	err := l.Info("info")
+	if err != nil {
+		t.Errorf("\nExpected nil, received <%+v>", err)
+	}
+}
+
+func TestUtilsNopLoggerNotice(t *testing.T) {
+	var l nopLogger
+	err := l.Notice("notice")
+	if err != nil {
+		t.Errorf("\nExpected nil, received <%+v>", err)
+	}
+}
+
+func TestUtilsNopLoggerWarning(t *testing.T) {
+	var l nopLogger
+	err := l.Warning("warning")
+	if err != nil {
+		t.Errorf("\nExpected nil, received <%+v>", err)
+	}
+}
+
+func TestUtilsMapChanDataInsufficientStr(t *testing.T) {
+	infoStr := "test1,\ntest2\ntest3\ntest4"
+
+	expected := make([]map[string]string, 0)
+	received := MapChanData(infoStr)
+
+	if !reflect.DeepEqual(expected, received) {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, received)
+	}
+}
+
+func TestUtilsMapChanDataContinue(t *testing.T) {
+	infoStr := "test1,value\ntest2\ntest3\ntest4\ntest5\ntest6"
+
+	expected := make([]map[string]string, 0)
+	received := MapChanData(infoStr)
+
+	if !reflect.DeepEqual(expected, received) {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, received)
+	}
+}
+
+func TestUtilsgenUUID(t *testing.T) {
+	uuid := genUUID()
+	if len(uuid) == 0 {
+		t.Fatalf("GenUUID error %s", uuid)
+	}
+	uuid2 := genUUID()
+	if len(uuid2) == 0 {
+		t.Fatalf("GenUUID error %s", uuid)
+	}
+	if uuid == uuid2 {
+		t.Error("GenUUID error.")
+	}
+}

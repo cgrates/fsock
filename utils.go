@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/url"
 	"regexp"
 	"sort"
@@ -104,10 +103,7 @@ func EventToMap(event string) (result map[string]string) {
 // helper function for uuid generation
 func genUUID() string {
 	b := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, b)
-	if err != nil {
-		log.Fatal(err)
-	}
+	io.ReadFull(rand.Reader, b)
 	b[6] = (b[6] & 0x0F) | 0x40
 	b[8] = (b[8] &^ 0x40) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10],

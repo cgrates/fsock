@@ -784,14 +784,7 @@ func TestFSockNewFSockPool(t *testing.T) {
 	}
 }
 
-func TestFSockPushFSock1(t *testing.T) {
-	// nothing to check
-	var fs *FSockPool
-	fsk := &FSock{}
-	fs.PushFSock(fsk)
-}
-
-func TestFSockPushFSock2(t *testing.T) {
+func TestFSockPushFSockAllowedConns(t *testing.T) {
 	var fs *FSockPool
 	var fsk *FSock
 	fs.PushFSock(fsk)
@@ -806,7 +799,7 @@ func TestFSockPushFSock2(t *testing.T) {
 	}
 }
 
-func TestFSockPushFSock3(t *testing.T) {
+func TestFSockPushFSock(t *testing.T) {
 	fs := &FSockPool{
 		allowedConns: make(chan struct{}, 1),
 		fSocks:       make(chan *FSock, 1),
@@ -820,5 +813,92 @@ func TestFSockPushFSock3(t *testing.T) {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", 1, len(fs.fSocks))
 	} else if rcv := <-fs.fSocks; !reflect.DeepEqual(rcv, fsk) {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", fsk, rcv)
+	}
+}
+
+func TestFSockPopFSockEmpty(t *testing.T) {
+	var fs *FSockPool
+
+	expected := "Unconfigured ConnectionPool"
+	fsk, err := fs.PopFSock()
+
+	if err == nil || err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	} else if fs != nil {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, fsk)
+	}
+}
+
+func TestFSockPopFSock2(t *testing.T) {
+	fs := &FSockPool{
+		fSocks: make(chan *FSock, 1),
+	}
+
+	expected := &FSock{}
+	fs.fSocks <- expected
+	fsock, err := fs.PopFSock()
+
+	if err != nil {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, err)
+	} else if fsock != expected { // the pointer should be the same
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, fsock)
+	}
+}
+
+func TestFSockPopFSockTimeout(t *testing.T) {
+	fs := &FSockPool{}
+
+	expected := ErrConnectionPoolTimeout
+	fsk, err := fs.PopFSock()
+
+	if err == nil || err != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	} else if fsk != nil {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, fsk)
+	}
+}
+
+func TestFSockPopFSock4(t *testing.T) {
+	fs := &FSockPool{
+		fSocks:      make(chan *FSock, 1),
+		maxWaitConn: 20 * time.Millisecond,
+	}
+
+	expected := &FSock{}
+	go func() {
+		time.Sleep(5 * time.Millisecond)
+		fs.fSocks <- expected
+	}()
+	fsock, err := fs.PopFSock()
+
+	if err != nil {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, err)
+	} else if fsock != expected { // the pointer should be the same
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, fsock)
+	}
+}
+
+func TestFSockPopFSock5(t *testing.T) {
+	fs := &FSockPool{
+		fsAddr:        "testAddr",
+		fsPasswd:      "testPw",
+		reconnects:    2,
+		eventHandlers: make(map[string][]func(string, int)),
+		eventFilters:  make(map[string][]string),
+		logger:        nopLogger{},
+		connIdx:       0,
+		fSocks:        make(chan *FSock, 1),
+		allowedConns:  make(chan struct{}),
+		maxWaitConn:   20 * time.Millisecond,
+	}
+
+	expected := "dial tcp: address testAddr: missing port in address"
+	close(fs.allowedConns)
+	fsock, err := fs.PopFSock()
+
+	if err.Error() != expected {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
+	} else if fsock != nil {
+		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, fsock)
 	}
 }
