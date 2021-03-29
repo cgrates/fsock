@@ -537,7 +537,7 @@ func TestFSockeventsPlainErrSend(t *testing.T) {
 	events := []string{""}
 
 	expected := ErrConnectionPoolTimeout
-	err := fs.eventsPlain(events)
+	err := fs.eventsPlain(events, true)
 
 	if err == nil || err != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
@@ -554,7 +554,7 @@ func TestFSockeventsPlainErrRead(t *testing.T) {
 	events := []string{"ALL"}
 
 	expected := io.EOF
-	err := fs.eventsPlain(events)
+	err := fs.eventsPlain(events, true)
 
 	if err == nil || err != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
@@ -571,7 +571,7 @@ func TestFSockeventsPlainUnexpectedReply(t *testing.T) {
 	events := []string{"CUSTOMtest"}
 
 	expected := fmt.Sprintf("Unexpected events-subscribe reply received: <%s>", "test\n")
-	err := fs.eventsPlain(events)
+	err := fs.eventsPlain(events, true)
 
 	if err == nil || err.Error() != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
@@ -590,7 +590,7 @@ func TestFSockfilterEventsUnexpectedReply(t *testing.T) {
 	}
 
 	expected := fmt.Sprintf("Unexpected filter-events reply received: <%s>", "test\n")
-	err := fs.filterEvents(filters)
+	err := fs.filterEvents(filters, true)
 
 	if err == nil || err.Error() != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
@@ -609,7 +609,7 @@ func TestFSockfilterEventsErrRead(t *testing.T) {
 	}
 
 	expected := io.EOF
-	err := fs.filterEvents(filters)
+	err := fs.filterEvents(filters, true)
 
 	if err == nil || err != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
@@ -628,7 +628,7 @@ func TestFSockfilterEventsErrSend(t *testing.T) {
 	}
 
 	expected := ErrConnectionPoolTimeout
-	err := fs.filterEvents(filters)
+	err := fs.filterEvents(filters, true)
 
 	if err == nil || err != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
@@ -646,7 +646,7 @@ func TestFSockfilterEventsErrNil(t *testing.T) {
 		"Event-Name": nil,
 	}
 
-	err := fs.filterEvents(filters)
+	err := fs.filterEvents(filters, true)
 
 	if err != nil {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, err)
@@ -774,8 +774,9 @@ func TestFSockNewFSockPool(t *testing.T) {
 		logger:        nopLogger{},
 		allowedConns:  nil,
 		fSocks:        nil,
+		bgapiSup:      true,
 	}
-	fsnew := NewFSockPool(maxFSocks, fsaddr, fspw, reconns, maxWait, evHandlers, evFilters, nil, connIdx)
+	fsnew := NewFSockPool(maxFSocks, fsaddr, fspw, reconns, maxWait, evHandlers, evFilters, nil, connIdx, true)
 	fsnew.allowedConns = nil
 	fsnew.fSocks = nil
 
