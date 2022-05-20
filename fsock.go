@@ -164,7 +164,7 @@ func (fs *FSock) ReconnectIfNeeded() (err error) {
 			break                      // No error or unrelated to connection
 		}
 		delay := time.Duration(fs.delayFunc()) * time.Second
-		if fs.maxReconnectInterval <= 0 && fs.maxReconnectInterval < delay {
+		if fs.maxReconnectInterval > 0 && fs.maxReconnectInterval < delay {
 			delay = fs.maxReconnectInterval
 		}
 		time.Sleep(delay)
