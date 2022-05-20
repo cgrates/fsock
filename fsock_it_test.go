@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 /*
@@ -43,7 +44,7 @@ func TestFSock(t *testing.T) {
 	evFilters := make(map[string][]string)
 	evHandlers := make(map[string][]func(string, int))
 
-	fs, err := NewFSock(faddr, fpass, noreconects, evHandlers, evFilters, l, conID, true)
+	fs, err := NewFSock(faddr, fpass, noreconects, 0, evHandlers, evFilters, l, conID, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +157,7 @@ func TestFSockNewFSockNilLogger(t *testing.T) {
 	evFilters := make(map[string][]string)
 	evHandlers := make(map[string][]func(string, int))
 
-	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, evHandlers, evFilters, l, conID, true)
+	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, 0, evHandlers, evFilters, l, conID, true)
 	errexp := "dial tcp 127.0.0.1:1234: connect: connection refused"
 
 	if err.Error() != errexp {
