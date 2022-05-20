@@ -32,26 +32,26 @@ func init() {
 }
 
 // NewFSock connects to FS and starts buffering input
-func NewFSock(fsaddr, fspaswd string, reconnects int,
-	eventHandlers map[string][]func(string, int),
-	eventFilters map[string][]string,
+func NewFSock(fsaddr, fspaswd string, reconnects int, maxReconnectInterval time.Duration,
+	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
 	l logger, connIdx int, bgapiSup bool) (fsock *FSock, err error) {
 	if l == nil {
 		l = nopLogger{}
 	}
 	fsock = &FSock{
-		fsMutex:         new(sync.RWMutex),
-		connIdx:         connIdx,
-		fsaddress:       fsaddr,
-		fspaswd:         fspaswd,
-		eventHandlers:   eventHandlers,
-		eventFilters:    eventFilters,
-		backgroundChans: make(map[string]chan string),
-		cmdChan:         make(chan string),
-		reconnects:      reconnects,
-		delayFunc:       DelayFunc(),
-		logger:          l,
-		bgapiSup:        bgapiSup,
+		fsMutex:              new(sync.RWMutex),
+		connIdx:              connIdx,
+		fsaddress:            fsaddr,
+		fspaswd:              fspaswd,
+		eventHandlers:        eventHandlers,
+		eventFilters:         eventFilters,
+		backgroundChans:      make(map[string]chan string),
+		cmdChan:              make(chan string),
+		reconnects:           reconnects,
+		maxReconnectInterval: maxReconnectInterval,
+		delayFunc:            DelayFunc(),
+		logger:               l,
+		bgapiSup:             bgapiSup,
 	}
 	if err = fsock.Connect(); err != nil {
 		return nil, err
@@ -61,22 +61,23 @@ func NewFSock(fsaddr, fspaswd string, reconnects int,
 
 // FSock reperesents the connection to FreeSWITCH Socket
 type FSock struct {
-	conn            net.Conn
-	fsMutex         *sync.RWMutex
-	connIdx         int // Indetifier for the component using this instance of FSock, optional
-	buffer          *bufio.Reader
-	fsaddress       string
-	fspaswd         string
-	eventHandlers   map[string][]func(string, int) // eventStr, connId
-	eventFilters    map[string][]string
-	backgroundChans map[string]chan string
-	cmdChan         chan string
-	reconnects      int
-	delayFunc       func() int
-	stopReadEvents  chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
-	errReadEvents   chan error
-	logger          logger
-	bgapiSup        bool
+	conn                 net.Conn
+	fsMutex              *sync.RWMutex
+	connIdx              int // Indetifier for the component using this instance of FSock, optional
+	buffer               *bufio.Reader
+	fsaddress            string
+	fspaswd              string
+	eventHandlers        map[string][]func(string, int) // eventStr, connId
+	eventFilters         map[string][]string
+	backgroundChans      map[string]chan string
+	cmdChan              chan string
+	reconnects           int
+	maxReconnectInterval time.Duration
+	delayFunc            func() int
+	stopReadEvents       chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
+	errReadEvents        chan error
+	logger               logger
+	bgapiSup             bool
 }
 
 // Connect or reconnect
@@ -162,7 +163,11 @@ func (fs *FSock) ReconnectIfNeeded() (err error) {
 			fs.delayFunc = DelayFunc() // Reset the reconnect delay
 			break                      // No error or unrelated to connection
 		}
-		time.Sleep(time.Duration(fs.delayFunc()) * time.Second)
+		delay := time.Duration(fs.delayFunc()) * time.Second
+		if fs.maxReconnectInterval <= 0 && fs.maxReconnectInterval < delay {
+			delay = fs.maxReconnectInterval
+		}
+		time.Sleep(delay)
 	}
 	if err == nil && !fs.Connected() {
 		return errors.New("Not connected to FreeSWITCH")
@@ -515,17 +520,18 @@ func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWai
 
 // Connection handler for commands sent to FreeSWITCH
 type FSockPool struct {
-	connIdx       int
-	fsAddr        string
-	fsPasswd      string
-	reconnects    int
-	eventHandlers map[string][]func(string, int)
-	eventFilters  map[string][]string
-	logger        logger
-	allowedConns  chan struct{} // Will be populated with members allowed
-	fSocks        chan *FSock   // Keep here reference towards the list of opened sockets
-	maxWaitConn   time.Duration // Maximum duration to wait for a connection to be returned by Pop
-	bgapiSup      bool
+	connIdx              int
+	fsAddr               string
+	fsPasswd             string
+	reconnects           int
+	maxReconnectInterval time.Duration
+	eventHandlers        map[string][]func(string, int)
+	eventFilters         map[string][]string
+	logger               logger
+	allowedConns         chan struct{} // Will be populated with members allowed
+	fSocks               chan *FSock   // Keep here reference towards the list of opened sockets
+	maxWaitConn          time.Duration // Maximum duration to wait for a connection to be returned by Pop
+	bgapiSup             bool
 }
 
 func (fs *FSockPool) PopFSock() (fsock *FSock, err error) {
@@ -543,7 +549,7 @@ func (fs *FSockPool) PopFSock() (fsock *FSock, err error) {
 		return
 	case <-fs.allowedConns:
 		tm.Stop()
-		return NewFSock(fs.fsAddr, fs.fsPasswd, fs.reconnects, fs.eventHandlers, fs.eventFilters, fs.logger, fs.connIdx, fs.bgapiSup)
+		return NewFSock(fs.fsAddr, fs.fsPasswd, fs.reconnects, fs.maxReconnectInterval, fs.eventHandlers, fs.eventFilters, fs.logger, fs.connIdx, fs.bgapiSup)
 	case <-tm.C:
 		return nil, ErrConnectionPoolTimeout
 	}
