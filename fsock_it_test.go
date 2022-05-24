@@ -44,7 +44,7 @@ func TestFSock(t *testing.T) {
 	evFilters := make(map[string][]string)
 	evHandlers := make(map[string][]func(string, int))
 
-	fs, err := NewFSock(faddr, fpass, noreconects, 0, evHandlers, evFilters, l, conID, true)
+	fs, err := NewFSock(faddr, fpass, noreconects, 0, fibDuration, evHandlers, evFilters, l, conID, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestFSockNewFSockNilLogger(t *testing.T) {
 	evFilters := make(map[string][]string)
 	evHandlers := make(map[string][]func(string, int))
 
-	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, 0, evHandlers, evFilters, l, conID, true)
+	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, 0, fibDuration, evHandlers, evFilters, l, conID, true)
 	errexp := "dial tcp 127.0.0.1:1234: connect: connection refused"
 
 	if err.Error() != errexp {
@@ -180,7 +180,7 @@ func TestFSockconnect(t *testing.T) {
 		backgroundChans: make(map[string]chan string),
 		cmdChan:         make(chan string),
 		reconnects:      -1,
-		delayFunc:       fib(),
+		delayFunc:       fibDuration,
 		logger:          nopLogger{},
 	}
 	l, err := net.Listen("tcp", fsaddr)

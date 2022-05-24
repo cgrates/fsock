@@ -454,7 +454,7 @@ func TestFSockReconnectIfNeeded(t *testing.T) {
 		fsMutex:    &sync.RWMutex{},
 		logger:     nopLogger{},
 		reconnects: 2,
-		delayFunc:  DelayFunc(),
+		delayFunc:  fibDuration,
 	}
 
 	expected := "dial tcp: missing address"
@@ -776,9 +776,10 @@ func TestFSockNewFSockPool(t *testing.T) {
 		fSocks:        nil,
 		bgapiSup:      true,
 	}
-	fsnew := NewFSockPool(maxFSocks, fsaddr, fspw, reconns, maxWait, evHandlers, evFilters, nil, connIdx, true)
+	fsnew := NewFSockPool(maxFSocks, fsaddr, fspw, reconns, maxWait, 0, fibDuration, evHandlers, evFilters, nil, connIdx, true)
 	fsnew.allowedConns = nil
 	fsnew.fSocks = nil
+	fsnew.delayFuncConstructor = nil
 
 	if !reflect.DeepEqual(fspool, fsnew) {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", fspool, fsnew)
@@ -881,16 +882,18 @@ func TestFSockPopFSock4(t *testing.T) {
 
 func TestFSockPopFSock5(t *testing.T) {
 	fs := &FSockPool{
-		fsAddr:        "testAddr",
-		fsPasswd:      "testPw",
-		reconnects:    2,
-		eventHandlers: make(map[string][]func(string, int)),
-		eventFilters:  make(map[string][]string),
-		logger:        nopLogger{},
-		connIdx:       0,
-		fSocks:        make(chan *FSock, 1),
-		allowedConns:  make(chan struct{}),
-		maxWaitConn:   20 * time.Millisecond,
+		fsAddr:               "testAddr",
+		fsPasswd:             "testPw",
+		reconnects:           2,
+		maxReconnectInterval: 0,
+		delayFuncConstructor: fibDuration,
+		eventHandlers:        make(map[string][]func(string, int)),
+		eventFilters:         make(map[string][]string),
+		logger:               nopLogger{},
+		connIdx:              0,
+		fSocks:               make(chan *FSock, 1),
+		allowedConns:         make(chan struct{}),
+		maxWaitConn:          20 * time.Millisecond,
 	}
 
 	expected := "dial tcp: address testAddr: missing port in address"
