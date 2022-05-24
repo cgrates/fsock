@@ -22,17 +22,12 @@ import (
 )
 
 var (
-	DelayFunc func() func() int
-
 	ErrConnectionPoolTimeout = errors.New("ConnectionPool timeout")
 )
 
-func init() {
-	DelayFunc = fib
-}
-
 // NewFSock connects to FS and starts buffering input
 func NewFSock(fsaddr, fspaswd string, reconnects int, maxReconnectInterval time.Duration,
+	delayFunc func(time.Duration, time.Duration) func() time.Duration,
 	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
 	l logger, connIdx int, bgapiSup bool) (fsock *FSock, err error) {
 	if l == nil {
@@ -49,7 +44,7 @@ func NewFSock(fsaddr, fspaswd string, reconnects int, maxReconnectInterval time.
 		cmdChan:              make(chan string),
 		reconnects:           reconnects,
 		maxReconnectInterval: maxReconnectInterval,
-		delayFunc:            DelayFunc(),
+		delayFunc:            delayFunc,
 		logger:               l,
 		bgapiSup:             bgapiSup,
 	}
@@ -73,8 +68,8 @@ type FSock struct {
 	cmdChan              chan string
 	reconnects           int
 	maxReconnectInterval time.Duration
-	delayFunc            func() int
-	stopReadEvents       chan struct{} //Keep a reference towards forkedReadEvents so we can stop them whenever necessary
+	delayFunc            func(time.Duration, time.Duration) func() time.Duration // used to create/reset the delay function
+	stopReadEvents       chan struct{}                                           // Keep a reference towards forkedReadEvents so we can stop them whenever necessary
 	errReadEvents        chan error
 	logger               logger
 	bgapiSup             bool
@@ -158,16 +153,12 @@ func (fs *FSock) ReconnectIfNeeded() (err error) {
 	if fs.Connected() { // No need to reconnect
 		return
 	}
+	delay := fs.delayFunc(time.Second, fs.maxReconnectInterval)
 	for i := 0; fs.reconnects == -1 || i < fs.reconnects; i++ { // Maximum reconnects reached, -1 for infinite reconnects
 		if err = fs.connect(); err == nil && fs.Connected() {
-			fs.delayFunc = DelayFunc() // Reset the reconnect delay
-			break                      // No error or unrelated to connection
+			break // No error or unrelated to connection
 		}
-		delay := time.Duration(fs.delayFunc()) * time.Second
-		if fs.maxReconnectInterval > 0 && fs.maxReconnectInterval < delay {
-			delay = fs.maxReconnectInterval
-		}
-		time.Sleep(delay)
+		time.Sleep(delay())
 	}
 	if err == nil && !fs.Connected() {
 		return errors.New("Not connected to FreeSWITCH")
@@ -494,23 +485,26 @@ func (fs *FSock) doBackgroundJob(event string) { // add mutex protection
 
 // Instantiates a new FSockPool
 func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
+	maxReconnectInterval time.Duration, delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration,
 	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
 	l logger, connIdx int, bgapiSup bool) *FSockPool {
 	if l == nil {
 		l = nopLogger{}
 	}
 	pool := &FSockPool{
-		connIdx:       connIdx,
-		fsAddr:        fsaddr,
-		fsPasswd:      fspasswd,
-		reconnects:    reconnects,
-		maxWaitConn:   maxWaitConn,
-		eventHandlers: eventHandlers,
-		eventFilters:  eventFilters,
-		logger:        l,
-		allowedConns:  make(chan struct{}, maxFSocks),
-		fSocks:        make(chan *FSock, maxFSocks),
-		bgapiSup:      bgapiSup,
+		connIdx:              connIdx,
+		fsAddr:               fsaddr,
+		fsPasswd:             fspasswd,
+		reconnects:           reconnects,
+		maxReconnectInterval: maxReconnectInterval,
+		delayFuncConstructor: delayFuncConstructor,
+		maxWaitConn:          maxWaitConn,
+		eventHandlers:        eventHandlers,
+		eventFilters:         eventFilters,
+		logger:               l,
+		allowedConns:         make(chan struct{}, maxFSocks),
+		fSocks:               make(chan *FSock, maxFSocks),
+		bgapiSup:             bgapiSup,
 	}
 	for i := 0; i < maxFSocks; i++ {
 		pool.allowedConns <- struct{}{} // Empty initiate so we do not need to wait later when we pop
@@ -525,6 +519,7 @@ type FSockPool struct {
 	fsPasswd             string
 	reconnects           int
 	maxReconnectInterval time.Duration
+	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration
 	eventHandlers        map[string][]func(string, int)
 	eventFilters         map[string][]string
 	logger               logger
@@ -549,7 +544,8 @@ func (fs *FSockPool) PopFSock() (fsock *FSock, err error) {
 		return
 	case <-fs.allowedConns:
 		tm.Stop()
-		return NewFSock(fs.fsAddr, fs.fsPasswd, fs.reconnects, fs.maxReconnectInterval, fs.eventHandlers, fs.eventFilters, fs.logger, fs.connIdx, fs.bgapiSup)
+		return NewFSock(fs.fsAddr, fs.fsPasswd, fs.reconnects, fs.maxReconnectInterval, fs.delayFuncConstructor,
+			fs.eventHandlers, fs.eventFilters, fs.logger, fs.connIdx, fs.bgapiSup)
 	case <-tm.C:
 		return nil, ErrConnectionPoolTimeout
 	}

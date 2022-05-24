@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 const EventBodyTag = "EvBody"
@@ -244,11 +245,15 @@ func isSliceMember(ss []string, s string) bool {
 	return (i < len(ss) && ss[i] == s)
 }
 
-// successive Fibonacci numbers.
-func fib() func() int {
+// fibDuration returns successive Fibonacci numbers converted to time.Duration.
+func fibDuration(durationUnit, maxDuration time.Duration) func() time.Duration {
 	a, b := 0, 1
-	return func() int {
+	return func() time.Duration {
 		a, b = b, a+b
-		return a
+		fibNrAsDuration := time.Duration(a) * durationUnit
+		if maxDuration > 0 && maxDuration < fibNrAsDuration {
+			return maxDuration
+		}
+		return fibNrAsDuration
 	}
 }
