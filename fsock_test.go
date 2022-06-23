@@ -246,9 +246,10 @@ func (cM *connMock3) SetWriteDeadline(t time.Time) error {
 }
 func TestFSockSend(t *testing.T) {
 	fs := &FSock{
-		logger:  nopLogger{},
-		fsMutex: &sync.RWMutex{},
-		conn:    new(connMock),
+		logger:    nopLogger{},
+		delayFunc: fibDuration,
+		fsMutex:   &sync.RWMutex{},
+		conn:      new(connMock),
 	}
 
 	expected := ErrConnectionPoolTimeout
@@ -326,6 +327,7 @@ func TestFSockAuthFailRead(t *testing.T) {
 func TestFSockSendBgapiCmdNonNilErr(t *testing.T) {
 	fs := &FSock{
 		fsMutex:         &sync.RWMutex{},
+		delayFunc:       fibDuration,
 		backgroundChans: make(map[string]chan string),
 	}
 
@@ -377,6 +379,7 @@ func TestFSockLocalAddrNotConnected(t *testing.T) {
 func TestFSockReadEvents(t *testing.T) {
 	fs := &FSock{
 		fsMutex:        &sync.RWMutex{},
+		delayFunc:      fibDuration,
 		stopReadEvents: make(chan struct{}),
 		errReadEvents:  make(chan error, 1),
 	}
@@ -467,7 +470,8 @@ func TestFSockReconnectIfNeeded(t *testing.T) {
 
 func TestFSockSendMsgCmdWithBody(t *testing.T) {
 	fs := &FSock{
-		fsMutex: &sync.RWMutex{},
+		fsMutex:   &sync.RWMutex{},
+		delayFunc: fibDuration,
 	}
 	uuid := "testID"
 	cmdargs := map[string]string{
