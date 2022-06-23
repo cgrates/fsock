@@ -20,6 +20,10 @@ import (
 	"time"
 )
 
+type testLogger struct {
+	logger *syslog.Writer
+}
+
 var FSTests = []func(*FSock, *testing.T){
 	testSendCmd,
 	testSendApiCmd,
@@ -153,11 +157,11 @@ func TestFSockNewFSockNilLogger(t *testing.T) {
 	fpaswd := "pw"
 	noreconnects := 5
 	conID := 0
-	var l logger
+	var l testLogger
 	evFilters := make(map[string][]string)
 	evHandlers := make(map[string][]func(string, int))
 
-	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, 0, fibDuration, evHandlers, evFilters, l, conID, true)
+	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, 0, fibDuration, evHandlers, evFilters, l.logger, conID, true)
 	errexp := "dial tcp 127.0.0.1:1234: connect: connection refused"
 
 	if err.Error() != errexp {
