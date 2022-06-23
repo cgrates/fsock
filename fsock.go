@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,7 +31,7 @@ func NewFSock(fsaddr, fspaswd string, reconnects int, maxReconnectInterval time.
 	delayFunc func(time.Duration, time.Duration) func() time.Duration,
 	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
 	l logger, connIdx int, bgapiSup bool) (fsock *FSock, err error) {
-	if l == nil {
+	if l == nil || (reflect.ValueOf(l).Kind() == reflect.Ptr && reflect.ValueOf(l).IsNil()) {
 		l = nopLogger{}
 	}
 	fsock = &FSock{
