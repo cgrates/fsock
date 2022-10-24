@@ -3,7 +3,6 @@ utils.go is released under the MIT License <http://www.opensource.org/licenses/m
 Copyright (C) ITsysCOM. All Rights Reserved.
 
 Provides FreeSWITCH socket communication.
-
 */
 package fsock
 
@@ -13,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -116,93 +114,31 @@ func toJSON(v interface{}) string {
 	return string(b)
 }
 
-func indexStringAll(origStr, srchd string) []int {
-	foundIdxs := make([]int, 0)
-	lenSearched := len(srchd)
-	startIdx := 0
-	for {
-		idxFound := strings.Index(origStr[startIdx:], srchd)
-		if idxFound == -1 {
-			break
-		}
-		idxFound += startIdx
-		foundIdxs = append(foundIdxs, idxFound)
-		startIdx = idxFound + lenSearched // Skip the characters found on next check
-	}
-	return foundIdxs
-}
-
-// Split considering {}[] which cancel separator
-// In the end we merge groups which are having consecutive [] or {} in beginning since this is how FS builts them
-func splitIgnoreGroups(origStr, sep string) []string {
-	if len(origStr) == 0 {
+// splitIgnoreGroups splits input string by specified separator while ignoring elements grouped using "{}" or "[]"
+func splitIgnoreGroups(s string, sep string) (sl []string) {
+	if s == "" {
 		return []string{}
-	} else if len(sep) == 0 {
-		return []string{origStr}
 	}
-	retSplit := make([]string, 0)
-	cmIdxs := indexStringAll(origStr, ",") // Main indexes of separators
-	if len(cmIdxs) == 0 {
-		return []string{origStr}
+	if sep == "" {
+		return []string{s}
 	}
-	oCrlyIdxs := indexStringAll(origStr, "{") // Index  { for exceptions
-	cCrlyIdxs := indexStringAll(origStr, "}") // Index  } for exceptions closing
-	oBrktIdxs := indexStringAll(origStr, "[") // Index [ for exceptions
-	cBrktIdxs := indexStringAll(origStr, "]") // Index ] for exceptions closing
-	lastNonexcludedIdx := 0
-	for i, cmdIdx := range cmIdxs {
-		if len(oCrlyIdxs) == len(cCrlyIdxs) && len(oBrktIdxs) == len(cBrktIdxs) { // We assume exceptions and closing them are symetrical, otherwise don't handle exceptions
-			exceptFound := false
-			for iCrlyIdx := range oCrlyIdxs {
-				if oCrlyIdxs[iCrlyIdx] < cmdIdx && cCrlyIdxs[iCrlyIdx] > cmdIdx { // Parentheses canceling indexing found
-					exceptFound = true
-					break
-				}
-			}
-			for oBrktIdx := range oBrktIdxs {
-				if oBrktIdxs[oBrktIdx] < cmdIdx && cBrktIdxs[oBrktIdx] > cmdIdx { // Parentheses canceling indexing found
-					exceptFound = true
-					break
-				}
-			}
-			if exceptFound {
-				continue
-			}
+	var idx, sqBrackets, crlBrackets int
+	for i, ch := range s {
+		if s[i] == sep[0] && sqBrackets == 0 && crlBrackets == 0 {
+			sl = append(sl, s[idx:i])
+			idx = i + 1
+		} else if ch == '[' {
+			sqBrackets++
+		} else if ch == ']' && sqBrackets > 0 {
+			sqBrackets--
+		} else if ch == '{' {
+			crlBrackets++
+		} else if ch == '}' && crlBrackets > 0 {
+			crlBrackets--
 		}
-		switch i {
-		case 0: // First one
-			retSplit = append(retSplit, origStr[:cmIdxs[i]])
-		case len(cmIdxs) - 1: // Last one
-			postpendStr := ""
-			if len(origStr) > cmIdxs[i]+1 { // Our separator is not the last character in the string
-				postpendStr = origStr[cmIdxs[i]+1:]
-			}
-			retSplit = append(retSplit, origStr[cmIdxs[lastNonexcludedIdx]+1:cmIdxs[i]], postpendStr)
-		default:
-			retSplit = append(retSplit, origStr[cmIdxs[lastNonexcludedIdx]+1:cmIdxs[i]]) // Discard the separator from end string
-		}
-		lastNonexcludedIdx = i
 	}
-	groupedSplt := make([]string, 0)
-	// Merge more consecutive groups (this is how FS displays app data from dial strings)
-	for idx, spltData := range retSplit {
-		if idx == 0 {
-			groupedSplt = append(groupedSplt, spltData)
-			continue // Nothing to do for first data
-		}
-		isGroup, _ := regexp.MatchString("{.*}|[.*]", spltData)
-		if !isGroup {
-			groupedSplt = append(groupedSplt, spltData)
-			continue
-		}
-		isPrevGroup, _ := regexp.MatchString("{.*}|[.*]", retSplit[idx-1])
-		if !isPrevGroup {
-			groupedSplt = append(groupedSplt, spltData)
-			continue
-		}
-		groupedSplt[len(groupedSplt)-1] = groupedSplt[len(groupedSplt)-1] + sep + spltData // Merge it with the previous data
-	}
-	return groupedSplt
+	sl = append(sl, s[idx:])
+	return sl
 }
 
 // Extracts value of a header from anywhere in content string
