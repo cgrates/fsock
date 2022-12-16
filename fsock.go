@@ -353,6 +353,7 @@ func (fs *FSock) readEvents() {
 		}
 		hdr, body, err := fs.readEvent()
 		if err != nil {
+			fs.cmdChan <- "-ERR " + err.Error()
 			fs.errReadEvents <- err
 			return
 		}
