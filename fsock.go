@@ -297,6 +297,7 @@ func (fs *FSock) readHeaders() (header string, err error) {
 		if err != nil {
 			fs.logger.Err(fmt.Sprintf("<FSock> Error reading headers: <%s>", err.Error()))
 			fs.Disconnect()
+			err = io.EOF // reconnectIfNeeded
 			return
 		}
 		// No Error, add received to localread buffer
@@ -317,6 +318,7 @@ func (fs *FSock) readBody(noBytes int) (body string, err error) {
 		if readByte, err = fs.buffer.ReadByte(); err != nil {
 			fs.logger.Err(fmt.Sprintf("<FSock> Error reading message body: <%s>", err.Error()))
 			fs.Disconnect()
+			err = io.EOF // reconnectIfNeeded
 			return
 		}
 		// No Error, add received to local read buffer
