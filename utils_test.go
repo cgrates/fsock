@@ -243,6 +243,59 @@ f66a1563-3d86-4a93-914d-3f9436f830d2,inbound,2018-06-29 04:37:18,1530261438,sofi
 	}
 }
 
+func TestMapChanData5(t *testing.T) {
+	chanInfoStr := `uuid,direction,created,created_epoch,name,state,cid_name,cid_num,ip_addr,dest,application,application_data,dialplan,context,read_codec,read_rate,read_bit_rate,write_codec,write_rate,write_bit_rate,secure,hostname,presence_id,presence_data,accountcode,callstate,callee_name,callee_num,callee_direction,call_uuid,sent_callee_name,sent_callee_num,initial_cid_name,initial_cid_num,initial_ip_addr,initial_dest,initial_dialplan,initial_context
+f66a1563-3d86-4a93-914d-3f9436f830d2,inbound,2023-01-17 05:14:50,1673925290,sofia/internal/1001@192.168.56.203,CS_EXECUTE,1001,1001,192.168.56.2,1002,playback,1 1 1 5000 # media/mypbx_mainmenu.mp3 tone_stream://%(210,0,622.37,440)%(120,0,197,109.33) var_menu_dtmf [1,3],XML,default,G722,16000,64000,G722,16000,64000,,test,,,1001,ACTIVE,,,,,,,1001,1001,192.168.56.2,1002,XML,default
+
+1 total. 
+`
+	eChanData := []map[string]string{
+		{
+			"uuid":             "f66a1563-3d86-4a93-914d-3f9436f830d2",
+			"direction":        "inbound",
+			"created":          "2023-01-17 05:14:50",
+			"created_epoch":    "1673925290",
+			"name":             "sofia/internal/1001@192.168.56.203",
+			"state":            "CS_EXECUTE",
+			"cid_name":         "1001",
+			"cid_num":          "1001",
+			"ip_addr":          "192.168.56.2",
+			"dest":             "1002",
+			"application":      "playback",
+			"application_data": "1 1 1 5000 # media/mypbx_mainmenu.mp3 tone_stream://%(210,0,622.37,440)%(120,0,197,109.33) var_menu_dtmf [1,3]",
+			"dialplan":         "XML",
+			"context":          "default",
+			"read_codec":       "G722",
+			"read_rate":        "16000",
+			"read_bit_rate":    "64000",
+			"write_codec":      "G722",
+			"write_rate":       "16000",
+			"write_bit_rate":   "64000",
+			"secure":           "",
+			"hostname":         "test",
+			"presence_id":      "",
+			"presence_data":    "",
+			"accountcode":      "1001",
+			"callstate":        "ACTIVE",
+			"callee_name":      "",
+			"callee_num":       "",
+			"callee_direction": "",
+			"call_uuid":        "",
+			"sent_callee_name": "",
+			"sent_callee_num":  "",
+			"initial_cid_name": "1001",
+			"initial_cid_num":  "1001",
+			"initial_ip_addr":  "192.168.56.2",
+			"initial_dest":     "1002",
+			"initial_dialplan": "XML",
+			"initial_context":  "default"},
+	}
+	rcvChanData := MapChanData(chanInfoStr)
+	if !reflect.DeepEqual(eChanData, rcvChanData) {
+		t.Errorf("expected: %+v,\nreceived: %+v", eChanData, rcvChanData)
+	}
+}
+
 func TestEventToMap1(t *testing.T) {
 	event := `Event-Name: BACKGROUND_JOB
 Core-UUID: 32a090b2-7279-4d0f-b33d-1e42c87af186
@@ -541,6 +594,11 @@ func TestUtilsSplitIgnoreGroups(t *testing.T) {
 			expected: []string{"el1", "[el2,el3,el4]", "el5", "el6", "{el7,el8}", "el9"},
 		},
 		{
+			desc:     "separate groups 2",
+			params:   []string{"el1,(el2,el3),el4,(el5,el6),{el7,el8},el9", ","},
+			expected: []string{"el1", "(el2,el3)", "el4", "(el5,el6)", "{el7,el8}", "el9"},
+		},
+		{
 			desc:     "nested groups 1",
 			params:   []string{"el1,el2,[el3,{el4,el5},el6],el7,el8,el9", ","},
 			expected: []string{"el1", "el2", "[el3,{el4,el5},el6]", "el7", "el8", "el9"},
@@ -554,6 +612,11 @@ func TestUtilsSplitIgnoreGroups(t *testing.T) {
 			desc:     "nested groups 3",
 			params:   []string{"el1,[el2,[el3,el4]],el5,{{el6,el7},el8},el9", ","},
 			expected: []string{"el1", "[el2,[el3,el4]]", "el5", "{{el6,el7},el8}", "el9"},
+		},
+		{
+			desc:     "nested groups 4",
+			params:   []string{"el1,[el2,(el3,el4)],el5,({el6,el7},el8),el9", ","},
+			expected: []string{"el1", "[el2,(el3,el4)]", "el5", "({el6,el7},el8)", "el9"},
 		},
 	}
 
