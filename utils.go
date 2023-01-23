@@ -114,7 +114,7 @@ func toJSON(v interface{}) string {
 	return string(b)
 }
 
-// splitIgnoreGroups splits input string by specified separator while ignoring elements grouped using "{}" or "[]"
+// splitIgnoreGroups splits input string by specified separator while ignoring elements grouped using "{}", "[]", or "()"
 func splitIgnoreGroups(s string, sep string) (sl []string) {
 	if s == "" {
 		return []string{}
@@ -122,9 +122,9 @@ func splitIgnoreGroups(s string, sep string) (sl []string) {
 	if sep == "" {
 		return []string{s}
 	}
-	var idx, sqBrackets, crlBrackets int
+	var idx, sqBrackets, crlBrackets, parantheses int
 	for i, ch := range s {
-		if s[i] == sep[0] && sqBrackets == 0 && crlBrackets == 0 {
+		if s[i] == sep[0] && sqBrackets == 0 && crlBrackets == 0 && parantheses == 0 {
 			sl = append(sl, s[idx:i])
 			idx = i + 1
 		} else if ch == '[' {
@@ -135,10 +135,14 @@ func splitIgnoreGroups(s string, sep string) (sl []string) {
 			crlBrackets++
 		} else if ch == '}' && crlBrackets > 0 {
 			crlBrackets--
+		} else if ch == '(' {
+			parantheses++
+		} else if ch == ')' && parantheses > 0 {
+			parantheses--
 		}
 	}
 	sl = append(sl, s[idx:])
-	return sl
+	return
 }
 
 // Extracts value of a header from anywhere in content string
