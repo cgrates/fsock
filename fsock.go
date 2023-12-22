@@ -24,6 +24,7 @@ import (
 
 var (
 	ErrConnectionPoolTimeout = errors.New("ConnectionPool timeout")
+	ErrDisconnected          = errors.New("DISCONNECTED")
 )
 
 // NewFSock connects to FS and starts buffering input
@@ -170,6 +171,9 @@ func (fs *FSock) ReconnectIfNeeded() (err error) {
 func (fs *FSock) send(cmd string) (err error) {
 	fs.fsMutex.RLock()
 	defer fs.fsMutex.RUnlock()
+	if fs.conn == nil {
+		return ErrDisconnected
+	}
 	if _, err = fs.conn.Write([]byte(cmd)); err != nil {
 		fs.logger.Err(fmt.Sprintf("<FSock> Cannot write command to socket <%s>", err.Error()))
 	}
