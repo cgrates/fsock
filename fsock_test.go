@@ -3,13 +3,13 @@ fsock_test.go is released under the MIT License <http://www.opensource.org/licen
 Copyright (C) ITsysCOM. All Rights Reserved.
 
 Provides FreeSWITCH socket communication.
-
 */
 package fsock
 
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -908,5 +908,107 @@ func TestFSockPopFSock5(t *testing.T) {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
 	} else if fsock != nil {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", nil, fsock)
+	}
+}
+
+func TestFSockReadBodyTT(t *testing.T) {
+	testCases := []struct {
+		name        string
+		input       string
+		expected    string
+		bytesToRead int
+		expectedErr error
+	}{
+		{
+			name:     "simple string",
+			input:    "Hello, World!",
+			expected: "Hello, World!",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "multiple-line string",
+			input:    "Line 1\nLine 2\nLine 3",
+			expected: "Line 1\nLine 2\nLine 3",
+		},
+		{
+			name:     "fs event",
+			input:    "Event-Name: CHANNEL_PARK\nCore-UUID: 44d90754-93de-4dd7-807a-9ad31e45d4de\nFreeSWITCH-Hostname: debian12\nFreeSWITCH-Switchname: debian12\nFreeSWITCH-IPv4: 10.0.2.15\nFreeSWITCH-IPv6: %3A%3A1\nEvent-Date-Local: 2023-12-22%2010%3A12%3A32\nEvent-Date-GMT: Fri,%2022%20Dec%202023%2015%3A12%3A32%20GMT\nEvent-Date-Timestamp: 1703257952506074\nEvent-Calling-File: switch_ivr.c\nEvent-Calling-Function: switch_ivr_park\nEvent-Calling-Line-Number: 1002\nEvent-Sequence: 498\nChannel-State: CS_EXECUTE\nChannel-Call-State: RINGING\nChannel-State-Number: 4\nChannel-Name: sofia/internal/1001%40192.168.56.120%3A5081\nUnique-ID: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nCall-Direction: inbound\nPresence-Call-Direction: inbound\nChannel-HIT-Dialplan: true\nChannel-Presence-ID: 1001%40192.168.56.120\nChannel-Call-UUID: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nAnswer-State: ringing\nCaller-Direction: inbound\nCaller-Logical-Direction: inbound\nCaller-Username: 1001\nCaller-Dialplan: XML\nCaller-Caller-ID-Name: 1001\nCaller-Caller-ID-Number: 1001\nCaller-Orig-Caller-ID-Name: 1001\nCaller-Orig-Caller-ID-Number: 1001\nCaller-Network-Addr: 192.168.56.120\nCaller-ANI: 1001\nCaller-Destination-Number: 1002\nCaller-Unique-ID: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nCaller-Source: mod_sofia\nCaller-Context: default\nCaller-Channel-Name: sofia/internal/1001%40192.168.56.120%3A5081\nCaller-Profile-Index: 1\nCaller-Profile-Created-Time: 1703257952506074\nCaller-Channel-Created-Time: 1703257952506074\nCaller-Channel-Answered-Time: 0\nCaller-Channel-Progress-Time: 0\nCaller-Channel-Progress-Media-Time: 0\nCaller-Channel-Hangup-Time: 0\nCaller-Channel-Transfer-Time: 0\nCaller-Channel-Resurrect-Time: 0\nCaller-Channel-Bridged-Time: 0\nCaller-Channel-Last-Hold: 0\nCaller-Channel-Hold-Accum: 0\nCaller-Screen-Bit: true\nCaller-Privacy-Hide-Name: false\nCaller-Privacy-Hide-Number: false\nvariable_direction: inbound\nvariable_uuid: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nvariable_session_id: 1\nvariable_sip_from_user: 1001\nvariable_sip_from_port: 5081\nvariable_sip_from_uri: 1001%40192.168.56.120%3A5081\nvariable_sip_from_host: 192.168.56.120\nvariable_video_media_flow: disabled\nvariable_audio_media_flow: disabled\nvariable_text_media_flow: disabled\nvariable_channel_name: sofia/internal/1001%40192.168.56.120%3A5081\nvariable_sip_call_id: 1-27764%40192.168.56.120\nvariable_sip_local_network_addr: 192.168.56.120\nvariable_sip_network_ip: 192.168.56.120\nvariable_sip_network_port: 5081\nvariable_sip_invite_stamp: 1703257952506074\nvariable_sip_received_ip: 192.168.56.120\nvariable_sip_received_port: 5081\nvariable_sip_via_protocol: udp\nvariable_sip_authorized: true\nvariable_sip_acl_authed_by: domains\nvariable_sip_from_user_stripped: 1001\nvariable_sip_from_tag: 27764SIPpTag001\nvariable_sofia_profile_name: internal\nvariable_sofia_profile_url: sip%3Amod_sofia%40192.168.56.120%3A5060\nvariable_recovery_profile_name: internal\nvariable_sip_full_via: SIP/2.0/UDP%20192.168.56.120%3A5081%3Bbranch%3Dz9hG4bK-27764-1-0\nvariable_sip_from_display: 1001\nvariable_sip_full_from: 1001%20%3Csip%3A1001%40192.168.56.120%3A5081%3E%3Btag%3D27764SIPpTag001\nvariable_sip_to_display: 1002\nvariable_sip_full_to: 1002%20%3Csip%3A1002%40192.168.56.120%3A5060%3E\nvariable_sip_req_user: 1002\nvariable_sip_req_port: 5060\nvariable_sip_req_uri: 1002%40192.168.56.120%3A5060\nvariable_sip_req_host: 192.168.56.120\nvariable_sip_to_user: 1002\nvariable_sip_to_port: 5060\nvariable_sip_to_uri: 1002%40192.168.56.120%3A5060\nvariable_sip_to_host: 192.168.56.120\nvariable_sip_contact_user: sipp\nvariable_sip_contact_port: 5081\nvariable_sip_contact_uri: sipp%40192.168.56.120%3A5081\nvariable_sip_contact_host: 192.168.56.120\nvariable_rtp_use_codec_string: G722,PCMU,PCMA,GSM\nvariable_sip_subject: Performance%20Test\nvariable_sip_via_host: 192.168.56.120\nvariable_sip_via_port: 5081\nvariable_max_forwards: 70\nvariable_presence_id: 1001%40192.168.56.120\nvariable_switch_r_sdp: v%3D0%0D%0Ao%3Duser1%2053655765%202353687637%20IN%20IP4%20192.168.56.120%0D%0As%3D-%0D%0Ac%3DIN%20IP4%20192.168.56.120%0D%0At%3D0%200%0D%0Am%3Daudio%206000%20RTP/AVP%200%0D%0Aa%3Drtpmap%3A0%20PCMU/8000%0D%0A\nvariable_ep_codec_string: CORE_PCM_MODULE.PCMU%408000h%4020i%4064000b\nvariable_endpoint_disposition: DELAYED%20NEGOTIATION\nvariable_call_uuid: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nvariable_current_application: park\n\n",
+			expected: "Event-Name: CHANNEL_PARK\nCore-UUID: 44d90754-93de-4dd7-807a-9ad31e45d4de\nFreeSWITCH-Hostname: debian12\nFreeSWITCH-Switchname: debian12\nFreeSWITCH-IPv4: 10.0.2.15\nFreeSWITCH-IPv6: %3A%3A1\nEvent-Date-Local: 2023-12-22%2010%3A12%3A32\nEvent-Date-GMT: Fri,%2022%20Dec%202023%2015%3A12%3A32%20GMT\nEvent-Date-Timestamp: 1703257952506074\nEvent-Calling-File: switch_ivr.c\nEvent-Calling-Function: switch_ivr_park\nEvent-Calling-Line-Number: 1002\nEvent-Sequence: 498\nChannel-State: CS_EXECUTE\nChannel-Call-State: RINGING\nChannel-State-Number: 4\nChannel-Name: sofia/internal/1001%40192.168.56.120%3A5081\nUnique-ID: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nCall-Direction: inbound\nPresence-Call-Direction: inbound\nChannel-HIT-Dialplan: true\nChannel-Presence-ID: 1001%40192.168.56.120\nChannel-Call-UUID: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nAnswer-State: ringing\nCaller-Direction: inbound\nCaller-Logical-Direction: inbound\nCaller-Username: 1001\nCaller-Dialplan: XML\nCaller-Caller-ID-Name: 1001\nCaller-Caller-ID-Number: 1001\nCaller-Orig-Caller-ID-Name: 1001\nCaller-Orig-Caller-ID-Number: 1001\nCaller-Network-Addr: 192.168.56.120\nCaller-ANI: 1001\nCaller-Destination-Number: 1002\nCaller-Unique-ID: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nCaller-Source: mod_sofia\nCaller-Context: default\nCaller-Channel-Name: sofia/internal/1001%40192.168.56.120%3A5081\nCaller-Profile-Index: 1\nCaller-Profile-Created-Time: 1703257952506074\nCaller-Channel-Created-Time: 1703257952506074\nCaller-Channel-Answered-Time: 0\nCaller-Channel-Progress-Time: 0\nCaller-Channel-Progress-Media-Time: 0\nCaller-Channel-Hangup-Time: 0\nCaller-Channel-Transfer-Time: 0\nCaller-Channel-Resurrect-Time: 0\nCaller-Channel-Bridged-Time: 0\nCaller-Channel-Last-Hold: 0\nCaller-Channel-Hold-Accum: 0\nCaller-Screen-Bit: true\nCaller-Privacy-Hide-Name: false\nCaller-Privacy-Hide-Number: false\nvariable_direction: inbound\nvariable_uuid: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nvariable_session_id: 1\nvariable_sip_from_user: 1001\nvariable_sip_from_port: 5081\nvariable_sip_from_uri: 1001%40192.168.56.120%3A5081\nvariable_sip_from_host: 192.168.56.120\nvariable_video_media_flow: disabled\nvariable_audio_media_flow: disabled\nvariable_text_media_flow: disabled\nvariable_channel_name: sofia/internal/1001%40192.168.56.120%3A5081\nvariable_sip_call_id: 1-27764%40192.168.56.120\nvariable_sip_local_network_addr: 192.168.56.120\nvariable_sip_network_ip: 192.168.56.120\nvariable_sip_network_port: 5081\nvariable_sip_invite_stamp: 1703257952506074\nvariable_sip_received_ip: 192.168.56.120\nvariable_sip_received_port: 5081\nvariable_sip_via_protocol: udp\nvariable_sip_authorized: true\nvariable_sip_acl_authed_by: domains\nvariable_sip_from_user_stripped: 1001\nvariable_sip_from_tag: 27764SIPpTag001\nvariable_sofia_profile_name: internal\nvariable_sofia_profile_url: sip%3Amod_sofia%40192.168.56.120%3A5060\nvariable_recovery_profile_name: internal\nvariable_sip_full_via: SIP/2.0/UDP%20192.168.56.120%3A5081%3Bbranch%3Dz9hG4bK-27764-1-0\nvariable_sip_from_display: 1001\nvariable_sip_full_from: 1001%20%3Csip%3A1001%40192.168.56.120%3A5081%3E%3Btag%3D27764SIPpTag001\nvariable_sip_to_display: 1002\nvariable_sip_full_to: 1002%20%3Csip%3A1002%40192.168.56.120%3A5060%3E\nvariable_sip_req_user: 1002\nvariable_sip_req_port: 5060\nvariable_sip_req_uri: 1002%40192.168.56.120%3A5060\nvariable_sip_req_host: 192.168.56.120\nvariable_sip_to_user: 1002\nvariable_sip_to_port: 5060\nvariable_sip_to_uri: 1002%40192.168.56.120%3A5060\nvariable_sip_to_host: 192.168.56.120\nvariable_sip_contact_user: sipp\nvariable_sip_contact_port: 5081\nvariable_sip_contact_uri: sipp%40192.168.56.120%3A5081\nvariable_sip_contact_host: 192.168.56.120\nvariable_rtp_use_codec_string: G722,PCMU,PCMA,GSM\nvariable_sip_subject: Performance%20Test\nvariable_sip_via_host: 192.168.56.120\nvariable_sip_via_port: 5081\nvariable_max_forwards: 70\nvariable_presence_id: 1001%40192.168.56.120\nvariable_switch_r_sdp: v%3D0%0D%0Ao%3Duser1%2053655765%202353687637%20IN%20IP4%20192.168.56.120%0D%0As%3D-%0D%0Ac%3DIN%20IP4%20192.168.56.120%0D%0At%3D0%200%0D%0Am%3Daudio%206000%20RTP/AVP%200%0D%0Aa%3Drtpmap%3A0%20PCMU/8000%0D%0A\nvariable_ep_codec_string: CORE_PCM_MODULE.PCMU%408000h%4020i%4064000b\nvariable_endpoint_disposition: DELAYED%20NEGOTIATION\nvariable_call_uuid: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nvariable_current_application: park\n\n",
+		},
+		{
+			name:        "less characters",
+			input:       "test_input",
+			bytesToRead: 11,
+			expected:    "",
+			expectedErr: io.EOF,
+		},
+		{
+			name:        "more characters",
+			input:       "test_input",
+			bytesToRead: 7,
+			expected:    "test_in",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			fs := FSock{
+				buffer:  bufio.NewReaderSize(buf, 8192),
+				logger:  nopLogger{},
+				fsMutex: new(sync.RWMutex),
+			}
+			_, err := fillBuffer(buf, tc.input)
+			if err != nil {
+				t.Fatalf("failed to fill buffer: %v", err)
+			}
+			noBytes := len(tc.input)
+			if tc.bytesToRead != 0 {
+				noBytes = tc.bytesToRead
+			}
+			received, err := fs.readBody(noBytes)
+			if !errors.Is(err, tc.expectedErr) {
+				t.Fatalf("expected error %v, received %v", tc.expectedErr, err)
+			}
+
+			if received != tc.expected {
+				t.Errorf("expected %q,\nreceived %q", tc.expected, received)
+			}
+		})
+	}
+}
+
+func fillBuffer(buf *bytes.Buffer, content string) (int, error) {
+	buf.Reset()
+	return buf.Write([]byte(content))
+}
+
+func BenchmarkFSockReadBody(b *testing.B) {
+	content := "Event-Name: CHANNEL_PARK\nCore-UUID: 44d90754-93de-4dd7-807a-9ad31e45d4de\nFreeSWITCH-Hostname: debian12\nFreeSWITCH-Switchname: debian12\nFreeSWITCH-IPv4: 10.0.2.15\nFreeSWITCH-IPv6: %3A%3A1\nEvent-Date-Local: 2023-12-22%2010%3A12%3A32\nEvent-Date-GMT: Fri,%2022%20Dec%202023%2015%3A12%3A32%20GMT\nEvent-Date-Timestamp: 1703257952506074\nEvent-Calling-File: switch_ivr.c\nEvent-Calling-Function: switch_ivr_park\nEvent-Calling-Line-Number: 1002\nEvent-Sequence: 498\nChannel-State: CS_EXECUTE\nChannel-Call-State: RINGING\nChannel-State-Number: 4\nChannel-Name: sofia/internal/1001%40192.168.56.120%3A5081\nUnique-ID: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nCall-Direction: inbound\nPresence-Call-Direction: inbound\nChannel-HIT-Dialplan: true\nChannel-Presence-ID: 1001%40192.168.56.120\nChannel-Call-UUID: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nAnswer-State: ringing\nCaller-Direction: inbound\nCaller-Logical-Direction: inbound\nCaller-Username: 1001\nCaller-Dialplan: XML\nCaller-Caller-ID-Name: 1001\nCaller-Caller-ID-Number: 1001\nCaller-Orig-Caller-ID-Name: 1001\nCaller-Orig-Caller-ID-Number: 1001\nCaller-Network-Addr: 192.168.56.120\nCaller-ANI: 1001\nCaller-Destination-Number: 1002\nCaller-Unique-ID: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nCaller-Source: mod_sofia\nCaller-Context: default\nCaller-Channel-Name: sofia/internal/1001%40192.168.56.120%3A5081\nCaller-Profile-Index: 1\nCaller-Profile-Created-Time: 1703257952506074\nCaller-Channel-Created-Time: 1703257952506074\nCaller-Channel-Answered-Time: 0\nCaller-Channel-Progress-Time: 0\nCaller-Channel-Progress-Media-Time: 0\nCaller-Channel-Hangup-Time: 0\nCaller-Channel-Transfer-Time: 0\nCaller-Channel-Resurrect-Time: 0\nCaller-Channel-Bridged-Time: 0\nCaller-Channel-Last-Hold: 0\nCaller-Channel-Hold-Accum: 0\nCaller-Screen-Bit: true\nCaller-Privacy-Hide-Name: false\nCaller-Privacy-Hide-Number: false\nvariable_direction: inbound\nvariable_uuid: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nvariable_session_id: 1\nvariable_sip_from_user: 1001\nvariable_sip_from_port: 5081\nvariable_sip_from_uri: 1001%40192.168.56.120%3A5081\nvariable_sip_from_host: 192.168.56.120\nvariable_video_media_flow: disabled\nvariable_audio_media_flow: disabled\nvariable_text_media_flow: disabled\nvariable_channel_name: sofia/internal/1001%40192.168.56.120%3A5081\nvariable_sip_call_id: 1-27764%40192.168.56.120\nvariable_sip_local_network_addr: 192.168.56.120\nvariable_sip_network_ip: 192.168.56.120\nvariable_sip_network_port: 5081\nvariable_sip_invite_stamp: 1703257952506074\nvariable_sip_received_ip: 192.168.56.120\nvariable_sip_received_port: 5081\nvariable_sip_via_protocol: udp\nvariable_sip_authorized: true\nvariable_sip_acl_authed_by: domains\nvariable_sip_from_user_stripped: 1001\nvariable_sip_from_tag: 27764SIPpTag001\nvariable_sofia_profile_name: internal\nvariable_sofia_profile_url: sip%3Amod_sofia%40192.168.56.120%3A5060\nvariable_recovery_profile_name: internal\nvariable_sip_full_via: SIP/2.0/UDP%20192.168.56.120%3A5081%3Bbranch%3Dz9hG4bK-27764-1-0\nvariable_sip_from_display: 1001\nvariable_sip_full_from: 1001%20%3Csip%3A1001%40192.168.56.120%3A5081%3E%3Btag%3D27764SIPpTag001\nvariable_sip_to_display: 1002\nvariable_sip_full_to: 1002%20%3Csip%3A1002%40192.168.56.120%3A5060%3E\nvariable_sip_req_user: 1002\nvariable_sip_req_port: 5060\nvariable_sip_req_uri: 1002%40192.168.56.120%3A5060\nvariable_sip_req_host: 192.168.56.120\nvariable_sip_to_user: 1002\nvariable_sip_to_port: 5060\nvariable_sip_to_uri: 1002%40192.168.56.120%3A5060\nvariable_sip_to_host: 192.168.56.120\nvariable_sip_contact_user: sipp\nvariable_sip_contact_port: 5081\nvariable_sip_contact_uri: sipp%40192.168.56.120%3A5081\nvariable_sip_contact_host: 192.168.56.120\nvariable_rtp_use_codec_string: G722,PCMU,PCMA,GSM\nvariable_sip_subject: Performance%20Test\nvariable_sip_via_host: 192.168.56.120\nvariable_sip_via_port: 5081\nvariable_max_forwards: 70\nvariable_presence_id: 1001%40192.168.56.120\nvariable_switch_r_sdp: v%3D0%0D%0Ao%3Duser1%2053655765%202353687637%20IN%20IP4%20192.168.56.120%0D%0As%3D-%0D%0Ac%3DIN%20IP4%20192.168.56.120%0D%0At%3D0%200%0D%0Am%3Daudio%206000%20RTP/AVP%200%0D%0Aa%3Drtpmap%3A0%20PCMU/8000%0D%0A\nvariable_ep_codec_string: CORE_PCM_MODULE.PCMU%408000h%4020i%4064000b\nvariable_endpoint_disposition: DELAYED%20NEGOTIATION\nvariable_call_uuid: 4967ceb1-c6f9-4af9-9855-df323d6763ad\nvariable_current_application: park\n\n"
+	buf := &bytes.Buffer{}
+	fs := &FSock{
+		logger:  nopLogger{},
+		buffer:  bufio.NewReaderSize(buf, 8092),
+		fsMutex: new(sync.RWMutex),
+	}
+	noBytes := len(content)
+	var err error
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = fillBuffer(buf, content)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = fs.readBody(noBytes)
+		if err != nil {
+			b.Fatal(err)
+		}
+		// if body != content {
+		// 	b.Fatalf("expected: %v, received: %v", content, body)
+		// }
 	}
 }
