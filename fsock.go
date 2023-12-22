@@ -313,20 +313,17 @@ func (fs *FSock) readHeaders() (header string, err error) {
 	return string(bytesRead), nil
 }
 
-// Reads the body from buffer, ln is given by content-length of headers
-func (fs *FSock) readBody(noBytes int) (body string, err error) {
+// readBody reads the specified number of bytes from the buffer.
+// The number of bytes to read is given by 'noBytes', which is determined from the content-length header.
+func (fs *FSock) readBody(noBytes int) (string, error) {
 	bytesRead := make([]byte, noBytes)
-	var readByte byte
+	_, err := io.ReadFull(fs.buffer, bytesRead)
+	if err != nil {
+		fs.logger.Err(fmt.Sprintf("<FSock> Error reading message body: <%v>", err))
+		fs.Disconnect() // Disconnect in case of an error.
 
-	for i := 0; i < noBytes; i++ {
-		if readByte, err = fs.buffer.ReadByte(); err != nil {
-			fs.logger.Err(fmt.Sprintf("<FSock> Error reading message body: <%s>", err.Error()))
-			fs.Disconnect()
-			err = io.EOF // reconnectIfNeeded
-			return
-		}
-		// No Error, add received to local read buffer
-		bytesRead[i] = readByte
+		// Return io.EOF to trigger ReconnectIfNeeded.
+		return "", io.EOF
 	}
 	return string(bytesRead), nil
 }
