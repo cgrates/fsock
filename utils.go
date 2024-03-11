@@ -66,7 +66,7 @@ func MapChanData(chanInfoStr string, chanDelim string) (chansInfoMap []map[strin
 	}
 	hdrs := strings.Split(spltChanInfo[0], chanDelim)
 	for _, chanInfoLn := range spltChanInfo[1 : len(spltChanInfo)-3] {
-		chanInfo := splitIgnoreGroups(chanInfoLn, chanDelim)
+		chanInfo := splitIgnoreGroups(chanInfoLn, chanDelim, len(hdrs))
 		if len(hdrs) != len(chanInfo) {
 			continue
 		}
@@ -116,13 +116,14 @@ func toJSON(v interface{}) string {
 
 // splitIgnoreGroups splits input string by specified separator
 // while ignoring elements grouped using "{}", "[]", or "()"
-func splitIgnoreGroups(s string, sep string) (sl []string) {
+func splitIgnoreGroups(s string, sep string, expectedLength int) []string {
 	if s == "" {
 		return []string{}
 	}
 	if sep == "" {
 		return []string{s}
 	}
+	sl := make([]string, 0, expectedLength)
 	var idx, sqBrackets, crlBrackets, parantheses int
 	sepLen := len(sep)
 	for i := 0; i < len(s); {
@@ -156,7 +157,7 @@ func splitIgnoreGroups(s string, sep string) (sl []string) {
 		i++
 	}
 	sl = append(sl, s[idx:])
-	return
+	return sl
 }
 
 // Extracts value of a header from anywhere in content string

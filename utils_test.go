@@ -16,22 +16,22 @@ import (
 
 func TestSplitIgnoreGroups(t *testing.T) {
 	strNoGroups := "d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXCHANGE_MEDIA,dan,+4986517174963,172.16.254.66,dan,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,Outbound Call,dan,,ba23506f-e36b-4c12-9c17-9146077bb240,,"
-	if !reflect.DeepEqual(strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ",")) {
-		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ","))
+	if !reflect.DeepEqual(strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ",", 0)) {
+		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ",", 0))
 	}
 	strNoGroups2 := "d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXCHANGE_MEDIA,dan,+4986517174963,172.16.254.66,dan,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,Outbound Call,dan,,ba23506f-e36b-4c12-9c17-9146077bb240"
-	if !reflect.DeepEqual(strings.Split(strNoGroups2, ","), splitIgnoreGroups(strNoGroups2, ",")) {
-		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ","))
+	if !reflect.DeepEqual(strings.Split(strNoGroups2, ","), splitIgnoreGroups(strNoGroups2, ",", 0)) {
+		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ",", 0))
 	}
 	strNoGroups3 := ",d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXCHANGE_MEDIA,dan,+4986517174963,172.16.254.66,dan,,,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,Outbound Call,dan,,ba23506f-e36b-4c12-9c17-9146077bb240"
-	if !reflect.DeepEqual(strings.Split(strNoGroups3, ","), splitIgnoreGroups(strNoGroups3, ",")) {
-		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ","))
+	if !reflect.DeepEqual(strings.Split(strNoGroups3, ","), splitIgnoreGroups(strNoGroups3, ",", 0)) {
+		t.Errorf("NormalSplit: \n%+v\n, resultWithGroups: \n%+v\n", strings.Split(strNoGroups, ","), splitIgnoreGroups(strNoGroups, ",", 0))
 	}
 	strWithGroups := "ba23506f-e36b-4c12-9c17-9146077bb240,inbound,2014-10-27 10:30:11,1414402211,sofia/ipbxas/dan@172.16.254.66,CS_EXECUTE,dan,dan,172.16.254.66,+4986517174963,bridge,{sip_contact_user=iPBXSuite}[origination_caller_id_number=+4986517174963,to_domain_tag=172.16.254.66,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=dan,sip_h_X-ForwardedCall=false,presence_id=dan@172.16.254.66,leg_progress_timeout=50,leg_timeout=100,to_ep_type=SIP,to_ep_tag=dan,sip_h_X-CalledDomainTag=172.16.254.66,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/dan@172.16.254.66;fs_path=sip:127.0.0.1,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,iPBXDev,dan@172.16.254.66,,ACTIVE,,,,ba23506f-e36b-4c12-9c17-9146077bb240,,"
 	eSplt := []string{"ba23506f-e36b-4c12-9c17-9146077bb240", "inbound", "2014-10-27 10:30:11", "1414402211", "sofia/ipbxas/dan@172.16.254.66", "CS_EXECUTE", "dan", "dan", "172.16.254.66", "+4986517174963", "bridge",
 		"{sip_contact_user=iPBXSuite}[origination_caller_id_number=+4986517174963,to_domain_tag=172.16.254.66,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=dan,sip_h_X-ForwardedCall=false,presence_id=dan@172.16.254.66,leg_progress_timeout=50,leg_timeout=100,to_ep_type=SIP,to_ep_tag=dan,sip_h_X-CalledDomainTag=172.16.254.66,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/dan@172.16.254.66;fs_path=sip:127.0.0.1",
 		"XML", "ipbxas", "PCMA", "8000", "64000", "PCMA", "8000", "64000", "", "iPBXDev", "dan@172.16.254.66", "", "ACTIVE", "", "", "", "ba23506f-e36b-4c12-9c17-9146077bb240", "", ""}
-	if splt := splitIgnoreGroups(strWithGroups, ","); !reflect.DeepEqual(eSplt, splt) {
+	if splt := splitIgnoreGroups(strWithGroups, ",", 0); !reflect.DeepEqual(eSplt, splt) {
 		t.Errorf("Expecting : %+v, received: %v", eSplt, splt)
 	}
 	strWithGroups = "8009b347-fe46-4c99-9bb8-89e52e05d35f,inbound,2014-11-19 12:05:13,1416395113,sofia/ipbxas/+4986517174963@1.2.3.4,CS_EXECUTE,004986517174963,+4986517174963,2.3.4.5,0049850210795,bridge,{sip_contact_user=CloudIPBX.com,bridge_early_media=true}[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user3,sip_h_X-ForwardedCall=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user3,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-Billable=false,max_forwards=50]sofia/ipbxas/user3@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp,[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user4,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user4,max_forwards=50]sofia/ipbxas/user4@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp,XML,ipbxas,PCMA,8000,64000,PCMA,8000,64000,,nl-asd-dev-sbc01,+4986517174963@1.2.3.4,,ACTIVE,,,,8009b347-fe46-4c99-9bb8-89e52e05d35f,,,004986517174963,+4986517174963,2.3.4.5,0049850210795,XML,ipbxas"
@@ -39,7 +39,7 @@ func TestSplitIgnoreGroups(t *testing.T) {
 		"{sip_contact_user=CloudIPBX.com,bridge_early_media=true}[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user3,sip_h_X-ForwardedCall=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user3,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-Billable=false,max_forwards=50]sofia/ipbxas/user3@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp",
 		"[to_domain_tag=sip.test.cloudipbx.com,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=+4986517174963,to_ep_type=SIP,to_ep_tag=user4,sip_h_X-CalledDomainTag=sip.test.cloudipbx.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user4,max_forwards=50]sofia/ipbxas/user4@sip.test.cloudipbx.com;fs_path=sip:127.0.0.1;transport=tcp",
 		"XML", "ipbxas", "PCMA", "8000", "64000", "PCMA", "8000", "64000", "", "nl-asd-dev-sbc01", "+4986517174963@1.2.3.4", "", "ACTIVE", "", "", "", "8009b347-fe46-4c99-9bb8-89e52e05d35f", "", "", "004986517174963", "+4986517174963", "2.3.4.5", "0049850210795", "XML", "ipbxas"}
-	if splt := splitIgnoreGroups(strWithGroups, ","); !reflect.DeepEqual(eSplt, splt) {
+	if splt := splitIgnoreGroups(strWithGroups, ",", 0); !reflect.DeepEqual(eSplt, splt) {
 		t.Errorf("Expecting : %+v, received: %v", eSplt, splt)
 	}
 	strWithGroups = "c2a2b753-8283-4347-94be-7df10a7710e3,inbound,2014-11-30 19:17:59,1417371479,sofia/loop_ipbxas/08765431@192.168.42.142,CS_EXECUTE,anonymous,08765431,192.168.42.142,eprou-eibhoog_g204_EPR,bridge,{sip_contact_user=Sipean,bridge_early_media=true}[origination_caller_id_name=DLH,to_ep_type=SIP,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user0008,sip_h_X-ForwardedCall=false,max_forwards=50,origination_caller_id_number=anonymous,to_domain_tag=sampledomain.com,to_ep_tag=user0008,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/user0008@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp,[to_domain_tag=sampledomain.com,to_ep_type=SIP,to_ep_tag=user0010,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPTag=user0010,sip_h_X-LoopApp=LOOP_ROUTED,max_forwards=50,origination_caller_id_name=DLH,origination_caller_id_number=anonymous,sip_h_X-CalledEPType=SIP,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false]sofia/ipbxas/user0010@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp,[to_domain_tag=sampledomain.com,to_ep_type=SIP,to_ep_tag=user0009,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-ForwardedCall=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_name=DLH,origination_caller_id_number=anonymous,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user0009,sip_h_X-Billable=false,max_forwards=50]sofia/ipbxas/user0009@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp,[origination_caller_id_name=DLH,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-ForwardedCall=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_number=anonymous,to_domain_tag=sampledomain.com,to_ep_type=SIP,to_ep_tag=user0001,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user0001,sip_h_X-Billable=false,max_forwards=50]sofia/ipbxas/user0001@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp,[origination_caller_id_name=DLH,to_ep_type=SIP,to_ep_tag=user0011,sip_h_X-CalledEPTag=user0011,origination_caller_id_number=anonymous,to_domain_tag=sampledomain.com,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPType=SIP,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,max_forwards=50]sofia/ipbxas/user0011@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp,[to_ep_type=SIP,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_name=DLH,origination_caller_id_number=anonymous,to_domain_tag=sampledomain.com,to_ep_tag=user0002,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user0002,max_forwards=50]sofia/ipbxas/user0002@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp,[origination_caller_id_name=DLH,origination_caller_id_number=anonymous,to_domain_tag=sampledomain.com,sip_h_X-CalledEPType=SIP,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,max_forwards=50,to_ep_type=SIP,to_ep_tag=user0003,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPTag=user0003,sip_h_X-ForwardedCall=false]sofia/ipbxas/user0003@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp,[origination_caller_id_name=DLH,to_ep_type=SIP,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPTag=user0004,sip_h_X-ForwardedCall=false,max_forwards=50,origination_caller_id_number=anonymous,to_domain_tag=sampledomain.com,to_ep_tag=user0004,sip_h_X-CalledEPType=SIP,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/user0004@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp,[to_domain_tag=sampledomain.com,to_ep_type=SIP,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPType=SIP,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,max_forwards=50,origination_caller_id_name=DLH,origination_caller_id_number=anonymous,to_ep_tag=user0012,sip_h_X-CalledEPTag=user0012]sofia/ipbxas/user0012@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp,XML,ipbxas_lo,PCMA,8000,64000,PCMA,8000,64000,,nl-asd-gls-sbc01,,,RINGING,,,,,,,anonymous,08765431,192.168.42.142,eprou-eibhoog_g204_EPR,XML,ipbxas_lo"
@@ -52,7 +52,7 @@ func TestSplitIgnoreGroups(t *testing.T) {
 		"[to_ep_type=SIP,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,origination_caller_id_name=DLH,origination_caller_id_number=anonymous,to_domain_tag=sampledomain.com,to_ep_tag=user0002,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPType=SIP,sip_h_X-CalledEPTag=user0002,max_forwards=50]sofia/ipbxas/user0002@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp",
 		"[origination_caller_id_name=DLH,origination_caller_id_number=anonymous,to_domain_tag=sampledomain.com,sip_h_X-CalledEPType=SIP,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,max_forwards=50,to_ep_type=SIP,to_ep_tag=user0003,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPTag=user0003,sip_h_X-ForwardedCall=false]sofia/ipbxas/user0003@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp", "[origination_caller_id_name=DLH,to_ep_type=SIP,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPTag=user0004,sip_h_X-ForwardedCall=false,max_forwards=50,origination_caller_id_number=anonymous,to_domain_tag=sampledomain.com,to_ep_tag=user0004,sip_h_X-CalledEPType=SIP,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED]sofia/ipbxas/user0004@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp", "[to_domain_tag=sampledomain.com,to_ep_type=SIP,sip_h_X-CalledDomainTag=sampledomain.com,sip_h_X-CalledEPType=SIP,sip_h_X-ForwardedCall=false,sip_h_X-Billable=false,sip_h_X-LoopApp=LOOP_ROUTED,max_forwards=50,origination_caller_id_name=DLH,origination_caller_id_number=anonymous,to_ep_tag=user0012,sip_h_X-CalledEPTag=user0012]sofia/ipbxas/user0012@sampledomain.com;fs_path=sip:127.0.0.1;transport=tcp",
 		"XML", "ipbxas_lo", "PCMA", "8000", "64000", "PCMA", "8000", "64000", "", "nl-asd-gls-sbc01", "", "", "RINGING", "", "", "", "", "", "", "anonymous", "08765431", "192.168.42.142", "eprou-eibhoog_g204_EPR", "XML", "ipbxas_lo"}
-	if splt := splitIgnoreGroups(strWithGroups, ","); !reflect.DeepEqual(eSplt, splt) {
+	if splt := splitIgnoreGroups(strWithGroups, ",", 0); !reflect.DeepEqual(eSplt, splt) {
 		t.Errorf("Expecting : %+v, received: %v", eSplt, splt)
 	}
 }
@@ -772,7 +772,7 @@ func TestUtilsSplitIgnoreGroups(t *testing.T) {
 
 	for testNr, testData := range testCases {
 		t.Run(testName(testData.desc, testNr), func(t *testing.T) {
-			if rcv := splitIgnoreGroups(testData.params[0], testData.params[1]); !reflect.DeepEqual(rcv, testData.expected) {
+			if rcv := splitIgnoreGroups(testData.params[0], testData.params[1], 0); !reflect.DeepEqual(rcv, testData.expected) {
 				t.Errorf("expected: <%+v>, \nreceived: <%+v>", testData.expected, rcv)
 			}
 		})
@@ -785,5 +785,38 @@ func BenchmarkHeaderVal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		headerVal(HEADER, "Content-Length")
 		headerVal(BODY, "Event-Date-Loca")
+	}
+}
+
+/*
+$ go test -bench=.  -run=^$ -benchtime=1s -count=5 -benchmem
+goos: linux
+goarch: amd64
+pkg: github.com/cgrates/fsock
+cpu: Intel(R) Core(TM) i7-10510U CPU @ 1.80GHz
+BenchmarkSplitIgnoreGroupsUnallocatedSlice-3   	  332491	      3188 ns/op	    1008 B/op	       6 allocs/op
+BenchmarkSplitIgnoreGroupsUnallocatedSlice-3   	  330399	      3186 ns/op	    1008 B/op	       6 allocs/op
+BenchmarkSplitIgnoreGroupsUnallocatedSlice-3   	  318609	      3172 ns/op	    1008 B/op	       6 allocs/op
+BenchmarkSplitIgnoreGroupsUnallocatedSlice-3   	  340814	      3291 ns/op	    1008 B/op	       6 allocs/op
+BenchmarkSplitIgnoreGroupsUnallocatedSlice-3   	  341724	      3167 ns/op	    1008 B/op	       6 allocs/op
+BenchmarkSplitIgnoreGroupsPreallocatedSlice-3     	  445351	      2349 ns/op	     480 B/op	       1 allocs/op
+BenchmarkSplitIgnoreGroupsPreallocatedSlice-3     	  439710	      2387 ns/op	     480 B/op	       1 allocs/op
+BenchmarkSplitIgnoreGroupsPreallocatedSlice-3     	  443182	      2375 ns/op	     480 B/op	       1 allocs/op
+BenchmarkSplitIgnoreGroupsPreallocatedSlice-3     	  508722	      2328 ns/op	     480 B/op	       1 allocs/op
+BenchmarkSplitIgnoreGroupsPreallocatedSlice-3     	  510158	      2351 ns/op	     480 B/op	       1 allocs/op
+*/
+func BenchmarkSplitIgnoreGroupsUnallocatedSlice(b *testing.B) {
+	input := "el1,el2,el3,el4,el5,el6,el7,el8,el9,el10,el11,el12,el13,el14,el15,el16,el17,el18,el19,el20,el21,el22,el23,el24,el25,el26,el27,el28,el29,el30"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = splitIgnoreGroups(input, ",", 0)
+	}
+}
+
+func BenchmarkSplitIgnoreGroupsPreallocatedSlice(b *testing.B) {
+	input := "el1,el2,el3,el4,el5,el6,el7,el8,el9,el10,el11,el12,el13,el14,el15,el16,el17,el18,el19,el20,el21,el22,el23,el24,el25,el26,el27,el28,el29,el30"
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = splitIgnoreGroups(input, ",", 30)
 	}
 }
