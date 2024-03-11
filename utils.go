@@ -58,15 +58,15 @@ func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 }
 
 // Converts string received from fsock into a list of channel info, each represented in a map
-func MapChanData(chanInfoStr string) (chansInfoMap []map[string]string) {
+func MapChanData(chanInfoStr string, chanDelim string) (chansInfoMap []map[string]string) {
 	chansInfoMap = make([]map[string]string, 0)
 	spltChanInfo := strings.Split(chanInfoStr, "\n")
 	if len(spltChanInfo) <= 4 {
 		return
 	}
-	hdrs := strings.Split(spltChanInfo[0], ",")
+	hdrs := strings.Split(spltChanInfo[0], chanDelim)
 	for _, chanInfoLn := range spltChanInfo[1 : len(spltChanInfo)-3] {
-		chanInfo := splitIgnoreGroups(chanInfoLn, ",")
+		chanInfo := splitIgnoreGroups(chanInfoLn, chanDelim)
 		if len(hdrs) != len(chanInfo) {
 			continue
 		}
@@ -114,7 +114,8 @@ func toJSON(v interface{}) string {
 	return string(b)
 }
 
-// splitIgnoreGroups splits input string by specified separator while ignoring elements grouped using "{}", "[]", or "()"
+// splitIgnoreGroups splits input string by specified separator
+// while ignoring elements grouped using "{}", "[]", or "()"
 func splitIgnoreGroups(s string, sep string) (sl []string) {
 	if s == "" {
 		return []string{}
@@ -123,23 +124,36 @@ func splitIgnoreGroups(s string, sep string) (sl []string) {
 		return []string{s}
 	}
 	var idx, sqBrackets, crlBrackets, parantheses int
-	for i, ch := range s {
-		if s[i] == sep[0] && sqBrackets == 0 && crlBrackets == 0 && parantheses == 0 {
+	sepLen := len(sep)
+	for i := 0; i < len(s); {
+		if strings.HasPrefix(s[i:], sep) && sqBrackets == 0 &&
+			crlBrackets == 0 && parantheses == 0 {
 			sl = append(sl, s[idx:i])
-			idx = i + 1
-		} else if ch == '[' {
-			sqBrackets++
-		} else if ch == ']' && sqBrackets > 0 {
-			sqBrackets--
-		} else if ch == '{' {
-			crlBrackets++
-		} else if ch == '}' && crlBrackets > 0 {
-			crlBrackets--
-		} else if ch == '(' {
-			parantheses++
-		} else if ch == ')' && parantheses > 0 {
-			parantheses--
+			idx = i + sepLen
+			i = idx
+			continue
 		}
+		switch s[i] {
+		case '[':
+			sqBrackets++
+		case ']':
+			if sqBrackets > 0 {
+				sqBrackets--
+			}
+		case '{':
+			crlBrackets++
+		case '}':
+			if crlBrackets > 0 {
+				crlBrackets--
+			}
+		case '(':
+			parantheses++
+		case ')':
+			if parantheses > 0 {
+				parantheses--
+			}
+		}
+		i++
 	}
 	sl = append(sl, s[idx:])
 	return
