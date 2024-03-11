@@ -1,3 +1,3 @@
 module github.com/cgrates/fsock
 
-go 1.18
+go 1.22
