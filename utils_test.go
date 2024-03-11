@@ -128,7 +128,7 @@ eacd0ae4-e1d5-447d-a7aa-e422a3a7abad,outbound,2014-10-26 18:08:32,1414343312,sof
 			"hostname": "iPBXDev", "callstate": "ACTIVE", "callee_num": "dan", "sent_callee_name": "dan", "created_epoch": "1414343312", "application": "", "write_codec": "PCMA", "write_rate": "8000", "presence_data": "",
 			"call_uuid": "e604a792-172a-4e8f-8fc9-9198f0d15f15", "uuid": "eacd0ae4-e1d5-447d-a7aa-e422a3a7abad", "cid_num": "+4986517174963", "application_data": "", "created": "2014-10-26 18:08:32", "dest": "dan"},
 	}
-	if rcvChanData := MapChanData(chanInfoStr); !reflect.DeepEqual(eChanData, rcvChanData) {
+	if rcvChanData := MapChanData(chanInfoStr, ","); !reflect.DeepEqual(eChanData, rcvChanData) {
 		t.Errorf("Expected: %+v, received: %+v", eChanData, rcvChanData)
 	}
 }
@@ -160,7 +160,7 @@ d775e082-4309-4629-b08a-ae174271f2e1,outbound,2014-10-27 10:30:11,1414402211,sof
 			"write_rate": "8000", "write_bit_rate": "64000", "callee_name": "Outbound Call", "dialplan": "XML", "context": "redirected", "read_rate": "8000", "hostname": "iPBXDev", "presence_id": "", "callee_num": "dan", "sent_callee_name": "dan", "dest": "dan",
 			"application": "", "write_codec": "PCMA", "sent_callee_num": "+4986517174963"},
 	}
-	if rcvChanData := MapChanData(chanInfoStr); !reflect.DeepEqual(eChanData, rcvChanData) {
+	if rcvChanData := MapChanData(chanInfoStr, ","); !reflect.DeepEqual(eChanData, rcvChanData) {
 		t.Errorf("Expected: %+v, received: %+v", eChanData, rcvChanData)
 	}
 }
@@ -195,7 +195,7 @@ e657365d-c51b-4487-85f8-188c0771664e,inbound,2014-11-19 12:05:13,1416395113,sofi
 			"uuid": "2a7efd05-6f6f-400e-b319-4b8ff6a77a80", "context": "redirected", "callee_direction": "SEND", "state": "CS_EXCHANGE_MEDIA", "dest": "user3", "sent_callee_num": "+4986517174963", "created": "2014-11-19 12:05:13", "dialplan": "XML", "read_codec": "PCMA", "initial_cid_num": "+4986517174963",
 			"read_rate": "8000", "secure": "", "hostname": "nl-asd-dev-sbc01", "presence_id": "", "initial_cid_name": "004986517174963", "callee_name": "Outbound Call", "initial_dialplan": "XML", "initial_context": "redirected"},
 	}
-	if rcvChanData := MapChanData(chanInfoStr); !reflect.DeepEqual(eChanData, rcvChanData) {
+	if rcvChanData := MapChanData(chanInfoStr, ","); !reflect.DeepEqual(eChanData, rcvChanData) {
 		for _, mp := range eChanData {
 			found := false
 			for _, rcvMp := range rcvChanData {
@@ -237,7 +237,7 @@ f66a1563-3d86-4a93-914d-3f9436f830d2,inbound,2018-06-29 04:37:18,1530261438,sofi
 			"initial_cid_num": "1001", "initial_ip_addr": "192.168.56.2",
 			"initial_dest": "1002", "initial_dialplan": "XML", "initial_context": "default"},
 	}
-	rcvChanData := MapChanData(chanInfoStr)
+	rcvChanData := MapChanData(chanInfoStr, ",")
 	if !reflect.DeepEqual(eChanData, rcvChanData) {
 		t.Errorf("Expected: %+v, received: %+v", eChanData, rcvChanData)
 	}
@@ -290,7 +290,7 @@ f66a1563-3d86-4a93-914d-3f9436f830d2,inbound,2023-01-17 05:14:50,1673925290,sofi
 			"initial_dialplan": "XML",
 			"initial_context":  "default"},
 	}
-	rcvChanData := MapChanData(chanInfoStr)
+	rcvChanData := MapChanData(chanInfoStr, ",")
 	if !reflect.DeepEqual(eChanData, rcvChanData) {
 		t.Errorf("expected: %+v,\nreceived: %+v", eChanData, rcvChanData)
 	}
@@ -522,7 +522,7 @@ func TestUtilsMapChanDataInsufficientStr(t *testing.T) {
 	infoStr := "test1,\ntest2\ntest3\ntest4"
 
 	expected := make([]map[string]string, 0)
-	received := MapChanData(infoStr)
+	received := MapChanData(infoStr, ",")
 
 	if !reflect.DeepEqual(expected, received) {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, received)
@@ -533,7 +533,7 @@ func TestUtilsMapChanDataContinue(t *testing.T) {
 	infoStr := "test1,value\ntest2\ntest3\ntest4\ntest5\ntest6"
 
 	expected := make([]map[string]string, 0)
-	received := MapChanData(infoStr)
+	received := MapChanData(infoStr, ",")
 
 	if !reflect.DeepEqual(expected, received) {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, received)
@@ -564,59 +564,209 @@ func TestUtilsSplitIgnoreGroups(t *testing.T) {
 		expected []string
 	}{
 		{
-			desc:     "empty input",
+			desc:     "EmptyInput",
 			params:   []string{"", ","},
 			expected: []string{},
 		},
 		{
-			desc:     "no groups",
+			desc:     "NoGroups",
 			params:   []string{"el1,el2,el3", ""},
 			expected: []string{"el1,el2,el3"},
 		},
 		{
-			desc:     "single element",
+			desc:     "SingleElement",
 			params:   []string{"el1", ","},
 			expected: []string{"el1"},
 		},
 		{
-			desc:     "leading and trailing separator",
+			desc:     "LeadingAndTrailingSeparator",
 			params:   []string{",el2,el3,el4,el5,el6,el7,el8,", ","},
 			expected: []string{"", "el2", "el3", "el4", "el5", "el6", "el7", "el8", ""},
 		},
 		{
-			desc:     "no groups",
+			desc:     "NoGroups",
 			params:   []string{"el1,el2,el3,el4,el5,el6,el7,el8,el9", ","},
 			expected: []string{"el1", "el2", "el3", "el4", "el5", "el6", "el7", "el8", "el9"},
 		},
 		{
-			desc:     "separate groups",
+			desc:     "SeparateGroups",
 			params:   []string{"el1,[el2,el3,el4],el5,el6,{el7,el8},el9", ","},
 			expected: []string{"el1", "[el2,el3,el4]", "el5", "el6", "{el7,el8}", "el9"},
 		},
 		{
-			desc:     "separate groups 2",
+			desc:     "SeparateGroups2",
 			params:   []string{"el1,(el2,el3),el4,(el5,el6),{el7,el8},el9", ","},
 			expected: []string{"el1", "(el2,el3)", "el4", "(el5,el6)", "{el7,el8}", "el9"},
 		},
 		{
-			desc:     "nested groups 1",
+			desc:     "NestedGroups1",
 			params:   []string{"el1,el2,[el3,{el4,el5},el6],el7,el8,el9", ","},
 			expected: []string{"el1", "el2", "[el3,{el4,el5},el6]", "el7", "el8", "el9"},
 		},
 		{
-			desc:     "nested groups 2",
+			desc:     "NestedGroups2",
 			params:   []string{"el1,el2,el3,{el4,el5,[el6,el7]},el8,el9", ","},
 			expected: []string{"el1", "el2", "el3", "{el4,el5,[el6,el7]}", "el8", "el9"},
 		},
 		{
-			desc:     "nested groups 3",
+			desc:     "NestedGroups3",
 			params:   []string{"el1,[el2,[el3,el4]],el5,{{el6,el7},el8},el9", ","},
 			expected: []string{"el1", "[el2,[el3,el4]]", "el5", "{{el6,el7},el8}", "el9"},
 		},
 		{
-			desc:     "nested groups 4",
+			desc:     "NestedGroups4",
 			params:   []string{"el1,[el2,(el3,el4)],el5,({el6,el7},el8),el9", ","},
 			expected: []string{"el1", "[el2,(el3,el4)]", "el5", "({el6,el7},el8)", "el9"},
+		},
+		{
+			desc:     "EmptyInputPipeSep",
+			params:   []string{"", "|"},
+			expected: []string{},
+		},
+		{
+			desc:     "SingleElementPipeSep",
+			params:   []string{"el1", "|"},
+			expected: []string{"el1"},
+		},
+		{
+			desc:     "LeadingAndTrailingPipeSep",
+			params:   []string{"|el2|el3|el4|el5|el6|el7|el8|", "|"},
+			expected: []string{"", "el2", "el3", "el4", "el5", "el6", "el7", "el8", ""},
+		},
+		{
+			desc:     "NoGroupsPipeSep",
+			params:   []string{"el1|el2|el3|el4|el5|el6|el7|el8|el9", "|"},
+			expected: []string{"el1", "el2", "el3", "el4", "el5", "el6", "el7", "el8", "el9"},
+		},
+		{
+			desc:     "SeparateGroupsPipeSep",
+			params:   []string{"el1|[el2|el3|el4]|el5|el6|{el7|el8}|el9", "|"},
+			expected: []string{"el1", "[el2|el3|el4]", "el5", "el6", "{el7|el8}", "el9"},
+		},
+		{
+			desc:     "SeparateGroupsPipeSep2",
+			params:   []string{"el1|(el2|el3)|el4|(el5|el6)|{el7|el8}|el9", "|"},
+			expected: []string{"el1", "(el2|el3)", "el4", "(el5|el6)", "{el7|el8}", "el9"},
+		},
+		{
+			desc:     "NestedGroupsPipeSep1",
+			params:   []string{"el1|el2|[el3|{el4|el5}|el6]|el7|el8|el9", "|"},
+			expected: []string{"el1", "el2", "[el3|{el4|el5}|el6]", "el7", "el8", "el9"},
+		},
+		{
+			desc:     "NestedGroupsPipeSep2",
+			params:   []string{"el1|el2|el3|{el4|el5|[el6|el7]}|el8|el9", "|"},
+			expected: []string{"el1", "el2", "el3", "{el4|el5|[el6|el7]}", "el8", "el9"},
+		},
+		{
+			desc:     "NestedGroupsPipeSep3",
+			params:   []string{"el1|[el2|[el3|el4]]|el5|{{el6|el7}|el8}|el9", "|"},
+			expected: []string{"el1", "[el2|[el3|el4]]", "el5", "{{el6|el7}|el8}", "el9"},
+		},
+		{
+			desc:     "NestedGroupsPipeSep4",
+			params:   []string{"el1|[el2|(el3|el4)]|el5|({el6|el7}|el8)|el9", "|"},
+			expected: []string{"el1", "[el2|(el3|el4)]", "el5", "({el6|el7}|el8)", "el9"},
+		},
+		{
+			desc:     "EmptyInputTab",
+			params:   []string{"", "\t"},
+			expected: []string{},
+		},
+		{
+			desc:     "SingleElementTab",
+			params:   []string{"el1", "\t"},
+			expected: []string{"el1"},
+		},
+		{
+			desc:     "LeadingAndTrailingTab",
+			params:   []string{"\tel2\tel3\tel4\tel5\tel6\tel7\tel8\t", "\t"},
+			expected: []string{"", "el2", "el3", "el4", "el5", "el6", "el7", "el8", ""},
+		},
+		{
+			desc:     "NoGroupsTab",
+			params:   []string{"el1\tel2\tel3\tel4\tel5\tel6\tel7\tel8\tel9", "\t"},
+			expected: []string{"el1", "el2", "el3", "el4", "el5", "el6", "el7", "el8", "el9"},
+		},
+		{
+			desc:     "SeparateGroupsTab",
+			params:   []string{"el1\t[el2\tel3\tel4]\tel5\tel6\t{el7\tel8}\tel9", "\t"},
+			expected: []string{"el1", "[el2\tel3\tel4]", "el5", "el6", "{el7\tel8}", "el9"},
+		},
+		{
+			desc:     "SeparateGroupsTab2",
+			params:   []string{"el1\t(el2\tel3)\tel4\t(el5\tel6)\t{el7\tel8}\tel9", "\t"},
+			expected: []string{"el1", "(el2\tel3)", "el4", "(el5\tel6)", "{el7\tel8}", "el9"},
+		},
+		{
+			desc:     "NestedGroupsTab1",
+			params:   []string{"el1\tel2\t[el3\t{el4\tel5}\tel6]\tel7\tel8\tel9", "\t"},
+			expected: []string{"el1", "el2", "[el3\t{el4\tel5}\tel6]", "el7", "el8", "el9"},
+		},
+		{
+			desc:     "NestedGroupsTab2",
+			params:   []string{"el1\tel2\tel3\t{el4\tel5\t[el6\tel7]}\tel8\tel9", "\t"},
+			expected: []string{"el1", "el2", "el3", "{el4\tel5\t[el6\tel7]}", "el8", "el9"},
+		},
+		{
+			desc:     "NestedGroupsTab3",
+			params:   []string{"el1\t[el2\t[el3\tel4]]\tel5\t{{el6\tel7}\tel8}\tel9", "\t"},
+			expected: []string{"el1", "[el2\t[el3\tel4]]", "el5", "{{el6\tel7}\tel8}", "el9"},
+		},
+		{
+			desc:     "NestedGroupsTab4",
+			params:   []string{"el1\t[el2\t(el3\tel4)]\tel5\t({el6\tel7}\tel8)\tel9", "\t"},
+			expected: []string{"el1", "[el2\t(el3\tel4)]", "el5", "({el6\tel7}\tel8)", "el9"},
+		},
+		{
+			desc:     "EmptyInputMultipleCharSep",
+			params:   []string{"", " sep "},
+			expected: []string{},
+		},
+		{
+			desc:     "SingleElementMultipleCharSep",
+			params:   []string{"el1", " sep "},
+			expected: []string{"el1"},
+		},
+		{
+			desc:     "LeadingAndTrailingMultipleCharSep",
+			params:   []string{" sep el2 sep el3 sep el4 sep el5 sep el6 sep el7 sep el8 sep ", " sep "},
+			expected: []string{"", "el2", "el3", "el4", "el5", "el6", "el7", "el8", ""},
+		},
+		{
+			desc:     "NoGroupsMultipleCharSep",
+			params:   []string{"el1 sep el2 sep el3 sep el4 sep el5 sep el6 sep el7 sep el8 sep el9", " sep "},
+			expected: []string{"el1", "el2", "el3", "el4", "el5", "el6", "el7", "el8", "el9"},
+		},
+		{
+			desc:     "SeparateGroupsMultipleCharSep",
+			params:   []string{"el1 sep [el2 sep el3 sep el4] sep el5 sep el6 sep {el7 sep el8} sep el9", " sep "},
+			expected: []string{"el1", "[el2 sep el3 sep el4]", "el5", "el6", "{el7 sep el8}", "el9"},
+		},
+		{
+			desc:     "SeparateGroupsMultipleCharSep2",
+			params:   []string{"el1 sep (el2 sep el3) sep el4 sep (el5 sep el6) sep {el7 sep el8} sep el9", " sep "},
+			expected: []string{"el1", "(el2 sep el3)", "el4", "(el5 sep el6)", "{el7 sep el8}", "el9"},
+		},
+		{
+			desc:     "NestedGroupsMultipleCharSep1",
+			params:   []string{"el1 sep el2 sep [el3 sep {el4 sep el5} sep el6] sep el7 sep el8 sep el9", " sep "},
+			expected: []string{"el1", "el2", "[el3 sep {el4 sep el5} sep el6]", "el7", "el8", "el9"},
+		},
+		{
+			desc:     "NestedGroupsMultipleCharSep2",
+			params:   []string{"el1 sep el2 sep el3 sep {el4 sep el5 sep [el6 sep el7]} sep el8 sep el9", " sep "},
+			expected: []string{"el1", "el2", "el3", "{el4 sep el5 sep [el6 sep el7]}", "el8", "el9"},
+		},
+		{
+			desc:     "NestedGroupsMultipleCharSep3",
+			params:   []string{"el1 sep [el2 sep [el3 sep el4]] sep el5 sep {{el6 sep el7} sep el8} sep el9", " sep "},
+			expected: []string{"el1", "[el2 sep [el3 sep el4]]", "el5", "{{el6 sep el7} sep el8}", "el9"},
+		},
+		{
+			desc:     "NestedGroupsMultipleCharSep4",
+			params:   []string{"el1 sep [el2 sep (el3 sep el4)] sep el5 sep ({el6 sep el7} sep el8) sep el9", " sep "},
+			expected: []string{"el1", "[el2 sep (el3 sep el4)]", "el5", "({el6 sep el7} sep el8)", "el9"},
 		},
 	}
 
