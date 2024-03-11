@@ -100,13 +100,10 @@ func (fs *FSock) connect() (err error) {
 	}
 	fs.fsMutex.Lock()
 	fs.conn = conn
+	fs.buffer = bufio.NewReaderSize(fs.conn, 8192) // reinit buffer
 	fs.fsMutex.Unlock()
 	fs.logger.Info("<FSock> Successfully connected to FreeSWITCH!")
-	// Connected, init buffer, auth and subscribe to desired events and filters
-	fs.fsMutex.RLock()
-	fs.buffer = bufio.NewReaderSize(fs.conn, 8192) // reinit buffer
-	fs.fsMutex.RUnlock()
-
+	// Connected, auth and subscribe to desired events and filters
 	var authChg string
 	if authChg, err = fs.readHeaders(); err != nil {
 		return fmt.Errorf("Received error<%s> when receiving the auth challenge", err)
