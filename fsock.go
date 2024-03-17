@@ -9,15 +9,10 @@ Provides FreeSWITCH socket communication.
 package fsock
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"reflect"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -28,27 +23,27 @@ var (
 )
 
 // NewFSock connects to FS and starts buffering input
-func NewFSock(fsaddr, fspaswd string, reconnects int, maxReconnectInterval time.Duration,
+func NewFSock(fsaddr, fsPasswd string, reconnects int, maxReconnectInterval time.Duration,
 	delayFunc func(time.Duration, time.Duration) func() time.Duration,
 	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
-	l logger, connIdx int, bgapiSup bool) (fsock *FSock, err error) {
-	if l == nil || (reflect.ValueOf(l).Kind() == reflect.Ptr && reflect.ValueOf(l).IsNil()) {
+	l logger, connIdx int, bgapi bool, stopError chan error) (fsock *FSock, err error) {
+	if l == nil ||
+		(reflect.ValueOf(l).Kind() == reflect.Ptr && reflect.ValueOf(l).IsNil()) {
 		l = nopLogger{}
 	}
 	fsock = &FSock{
-		fsMutex:              new(sync.RWMutex),
+		fsMux:                new(sync.RWMutex),
 		connIdx:              connIdx,
-		fsaddress:            fsaddr,
-		fspaswd:              fspaswd,
-		eventHandlers:        eventHandlers,
+		fsAddr:               fsaddr,
+		fsPasswd:             fsPasswd,
 		eventFilters:         eventFilters,
-		backgroundChans:      make(map[string]chan string),
-		cmdChan:              make(chan string),
+		eventHandlers:        eventHandlers,
 		reconnects:           reconnects,
 		maxReconnectInterval: maxReconnectInterval,
 		delayFunc:            delayFunc,
 		logger:               l,
-		bgapiSup:             bgapiSup,
+		bgapi:                bgapi,
+		stopError:            stopError,
 	}
 	if err = fsock.Connect(); err != nil {
 		return nil, err
@@ -58,158 +53,118 @@ func NewFSock(fsaddr, fspaswd string, reconnects int, maxReconnectInterval time.
 
 // FSock reperesents the connection to FreeSWITCH Socket
 type FSock struct {
-	conn                 net.Conn
-	fsMutex              *sync.RWMutex
+	fsMux                *sync.RWMutex
+	fsConn               *FSConn
 	connIdx              int // Indetifier for the component using this instance of FSock, optional
-	buffer               *bufio.Reader
-	fsaddress            string
-	fspaswd              string
-	eventHandlers        map[string][]func(string, int) // eventStr, connId
+	fsAddr               string
+	fsPasswd             string
 	eventFilters         map[string][]string
-	backgroundChans      map[string]chan string
-	cmdChan              chan string
+	eventHandlers        map[string][]func(string, int) // eventStr, connId
 	reconnects           int
 	maxReconnectInterval time.Duration
 	delayFunc            func(time.Duration, time.Duration) func() time.Duration // used to create/reset the delay function
 	stopReadEvents       chan struct{}                                           // Keep a reference towards forkedReadEvents so we can stop them whenever necessary
-	errReadEvents        chan error
+	readEventsFStopped   chan struct{}                                           // FSConn will signal the abormal disconnect
 	logger               logger
-	bgapiSup             bool
+	bgapi                bool
+	stopError            chan error // will communicate on final disconnect
 }
 
-// Connect or reconnect
-func (fs *FSock) Connect() error {
-	if fs.stopReadEvents != nil {
-		close(fs.stopReadEvents) // we have read events already processing, request stop
-	}
-	// Reinit readEvents channels so we avoid concurrency issues between goroutines
-	fs.stopReadEvents = make(chan struct{})
-	fs.errReadEvents = make(chan error)
+// Connect adds loking to connect method
+func (fs *FSock) Connect() (err error) {
+	fs.fsMux.Lock()
+	defer fs.fsMux.Unlock()
 	return fs.connect()
 }
 
+// Connect is a non-thread safe connect method
 func (fs *FSock) connect() (err error) {
-	if fs.Connected() {
-		fs.Disconnect()
-	}
-
-	var conn net.Conn
-	if conn, err = net.Dial("tcp", fs.fsaddress); err != nil {
-		fs.logger.Err(fmt.Sprintf("<FSock> Attempt to connect to FreeSWITCH, received: %s", err.Error()))
+	// Reinit readEvents channels so we avoid concurrency issues between goroutines
+	fs.stopReadEvents = make(chan struct{})
+	fs.readEventsFStopped = make(chan struct{})
+	fs.fsConn, err = NewFSConn(fs.fsAddr, fs.fsPasswd,
+		fs.connIdx, fs.logger,
+		fs.eventFilters, fs.eventHandlers,
+		fs.bgapi, fs.stopReadEvents, fs.readEventsFStopped)
+	if err != nil {
 		return
 	}
-	fs.fsMutex.Lock()
-	fs.conn = conn
-	fs.buffer = bufio.NewReaderSize(fs.conn, 8192) // reinit buffer
-	fs.fsMutex.Unlock()
-	fs.logger.Info("<FSock> Successfully connected to FreeSWITCH!")
-	// Connected, auth and subscribe to desired events and filters
-	var authChg string
-	if authChg, err = fs.readHeaders(); err != nil {
-		return fmt.Errorf("Received error<%s> when receiving the auth challenge", err)
-	}
-	if !strings.Contains(authChg, "auth/request") {
-		return errors.New("No auth challenge received")
-	}
-	if err = fs.auth(); err != nil { // Auth did not succeed
-		return
-	}
-
-	if err = fs.filterEvents(fs.eventFilters, fs.bgapiSup); err != nil {
-		return
-	}
-
-	// Subscribe to events handled by event handlers
-	if err = fs.eventsPlain(getMapKeys(fs.eventHandlers), fs.bgapiSup); err != nil {
-		return
-	}
-	go fs.readEvents() // Fork read events in it's own goroutine
+	go func() { // automatic restart if the connection was dropped due to read errors
+		if forced := <-fs.readEventsFStopped; forced == struct{}{} {
+			fs.fsMux.RLock()
+			defer fs.fsMux.RUnlock()
+			fs.disconnect()
+			fs.reconnectIfNeeded()
+			if !fs.connected() {
+				fs.stopError <- io.EOF // signal to external sources that we will not attempt reconnect
+			}
+		}
+	}()
 	return
 }
 
-// Connected checks if socket connected. Can be extended with pings
+// Connected adds up locking on top of normal connected method.
 func (fs *FSock) Connected() (ok bool) {
-	fs.fsMutex.RLock()
-	ok = (fs.conn != nil)
-	fs.fsMutex.RUnlock()
-	return
+	fs.fsMux.RLock()
+	defer fs.fsMux.RUnlock()
+	return fs.connected()
+}
+
+// connected checks if socket connected. Not thread safe.
+func (fs *FSock) connected() (ok bool) {
+	return fs.fsConn != nil
+}
+
+// Disconnect adds up locking for disconnect
+func (fs *FSock) Disconnect() (err error) {
+	fs.fsMux.Lock()
+	defer fs.fsMux.Unlock()
+	return fs.disconnect()
 }
 
 // Disconnect disconnects from socket
-func (fs *FSock) Disconnect() (err error) {
-	fs.fsMutex.Lock()
-	if fs.conn != nil {
+func (fs *FSock) disconnect() (err error) {
+	if fs.fsConn != nil {
 		fs.logger.Info("<FSock> Disconnecting from FreeSWITCH!")
-		err = fs.conn.Close()
-		fs.conn = nil
+		err = fs.fsConn.Disconnect()
+		fs.fsConn = nil
 	}
-	fs.fsMutex.Unlock()
 	return
 }
 
-// ReconnectIfNeeded if not connected, attempt reconnect if allowed
+// ReconnectIfNeeded adds up locking to reconnectIfNeeded
 func (fs *FSock) ReconnectIfNeeded() (err error) {
-	if fs.Connected() { // No need to reconnect
+	fs.fsMux.Lock()
+	defer fs.fsMux.Unlock()
+	return fs.reconnectIfNeeded()
+}
+
+// reconnectIfNeeded if not connected, attempt reconnect if allowed
+func (fs *FSock) reconnectIfNeeded() (err error) {
+	if fs.connected() { // No need to reconnect
 		return
 	}
 	delay := fs.delayFunc(time.Second, fs.maxReconnectInterval)
 	for i := 0; fs.reconnects == -1 || i < fs.reconnects; i++ { // Maximum reconnects reached, -1 for infinite reconnects
-		if err = fs.connect(); err == nil && fs.Connected() {
+		if err = fs.connect(); err == nil && fs.connected() {
 			break // No error or unrelated to connection
 		}
 		time.Sleep(delay())
 	}
-	if err == nil && !fs.Connected() {
-		return errors.New("Not connected to FreeSWITCH")
+	if err == nil && !fs.connected() {
+		return errors.New("not connected to FreeSWITCH")
 	}
 	return // nil or last error in the loop
 }
 
-func (fs *FSock) send(cmd string) (err error) {
-	fs.fsMutex.RLock()
-	defer fs.fsMutex.RUnlock()
-	if fs.conn == nil {
-		return ErrDisconnected
-	}
-	if _, err = fs.conn.Write([]byte(cmd)); err != nil {
-		fs.logger.Err(fmt.Sprintf("<FSock> Cannot write command to socket <%s>", err.Error()))
-	}
-	return
-}
-
-// Auth to FS
-func (fs *FSock) auth() (err error) {
-	if err = fs.send("auth " + fs.fspaswd + "\n\n"); err != nil {
-		return
-	}
-	var rply string
-	if rply, err = fs.readHeaders(); err != nil {
-		return
-	}
-	if !strings.Contains(rply, "Reply-Text: +OK accepted") {
-		return fmt.Errorf("Unexpected auth reply received: <%s>", rply)
-	}
-	return
-}
-
-func (fs *FSock) sendCmd(cmd string) (rply string, err error) {
-	if err = fs.ReconnectIfNeeded(); err != nil {
-		return
-	}
-	if err = fs.send(cmd + "\n"); err != nil {
-		return
-	}
-
-	rply = <-fs.cmdChan
-	if strings.Contains(rply, "-ERR") {
-		return "", errors.New(strings.TrimSpace(rply))
-	}
-	return
-}
-
 // Generic proxy for commands
-func (fs *FSock) SendCmd(cmdStr string) (string, error) {
-	return fs.sendCmd(cmdStr + "\n")
+func (fs *FSock) SendCmd(cmdStr string) (rply string, err error) {
+	fs.fsMux.Lock() // make sure the fsConn does not get nil-ed after the reconnect
+	defer fs.fsMux.Unlock()
+	if err = fs.reconnectIfNeeded(); err != nil {
+		return
+	}
+	return fs.fsConn.Send(cmdStr + "\n") // ToDo: check if we have to send a secondary new line
 }
 
 func (fs *FSock) SendCmdWithArgs(cmd string, args map[string]string, body string) (string, error) {
@@ -219,34 +174,18 @@ func (fs *FSock) SendCmdWithArgs(cmd string, args map[string]string, body string
 	if len(body) != 0 {
 		cmd += "\n" + body + "\n"
 	}
-	return fs.sendCmd(cmd)
+	return fs.SendCmd(cmd)
 }
 
 // Send API command
 func (fs *FSock) SendApiCmd(cmdStr string) (string, error) {
-	return fs.sendCmd("api " + cmdStr + "\n")
-}
-
-// Send BGAPI command
-func (fs *FSock) SendBgapiCmd(cmdStr string) (out chan string, err error) {
-	jobUUID := genUUID()
-	out = make(chan string)
-
-	fs.fsMutex.Lock()
-	fs.backgroundChans[jobUUID] = out
-	fs.fsMutex.Unlock()
-
-	_, err = fs.sendCmd("bgapi " + cmdStr + "\nJob-UUID:" + jobUUID + "\n")
-	if err != nil {
-		return nil, err
-	}
-	return
+	return fs.SendCmd("api " + cmdStr + "\n")
 }
 
 // SendMsgCmdWithBody command
 func (fs *FSock) SendMsgCmdWithBody(uuid string, cmdargs map[string]string, body string) (err error) {
 	if len(cmdargs) == 0 {
-		return errors.New("Need command arguments")
+		return errors.New("need command arguments")
 	}
 	_, err = fs.SendCmdWithArgs("sendmsg "+uuid+"\n", cmdargs, body)
 	return
@@ -270,295 +209,19 @@ func (fs *FSock) SendEvent(eventSubclass string, eventParams map[string]string) 
 	return fs.SendEventWithBody(eventSubclass, eventParams, "")
 }
 
-// ReadEvents reads events from socket, attempt reconnect if disconnected
-func (fs *FSock) ReadEvents() (err error) {
-	for {
-		if err = <-fs.errReadEvents; err == io.EOF { // Disconnected, try reconnect
-			if err = fs.ReconnectIfNeeded(); err != nil {
-				return
-			}
-		}
-	}
+// Send BGAPI command
+func (fs *FSock) SendBgapiCmd(cmdStr string) (out chan string, err error) {
+	fs.fsMux.Lock()
+	defer fs.fsMux.Unlock()
+	fs.ReconnectIfNeeded()
+	return fs.fsConn.SendBgapiCmd(cmdStr)
 }
 
 func (fs *FSock) LocalAddr() net.Addr {
-	if !fs.Connected() {
+	fs.fsMux.RLock()
+	defer fs.fsMux.RUnlock()
+	if !fs.connected() {
 		return nil
 	}
-	return fs.conn.LocalAddr()
-}
-
-// Reads headers until delimiter reached
-func (fs *FSock) readHeaders() (header string, err error) {
-	bytesRead := make([]byte, 0)
-	var readLine []byte
-
-	for {
-		readLine, err = fs.buffer.ReadBytes('\n')
-		if err != nil {
-			fs.logger.Err(fmt.Sprintf("<FSock> Error reading headers: <%s>", err.Error()))
-			fs.Disconnect()
-			err = io.EOF // reconnectIfNeeded
-			return
-		}
-		// No Error, add received to localread buffer
-		if len(bytes.TrimSpace(readLine)) == 0 {
-			break
-		}
-		bytesRead = append(bytesRead, readLine...)
-	}
-	return string(bytesRead), nil
-}
-
-// readBody reads the specified number of bytes from the buffer.
-// The number of bytes to read is given by 'noBytes', which is determined from the content-length header.
-func (fs *FSock) readBody(noBytes int) (string, error) {
-	bytesRead := make([]byte, noBytes)
-	_, err := io.ReadFull(fs.buffer, bytesRead)
-	if err != nil {
-		fs.logger.Err(fmt.Sprintf("<FSock> Error reading message body: <%v>", err))
-		fs.Disconnect() // Disconnect in case of an error.
-
-		// Return io.EOF to trigger ReconnectIfNeeded.
-		return "", io.EOF
-	}
-	return string(bytesRead), nil
-}
-
-// Event is made out of headers and body (if present)
-func (fs *FSock) readEvent() (header string, body string, err error) {
-	if header, err = fs.readHeaders(); err != nil {
-		return
-	}
-	if !strings.Contains(header, "Content-Length") { //No body
-		return
-	}
-	var cl int
-	if cl, err = strconv.Atoi(headerVal(header, "Content-Length")); err != nil {
-		err = fmt.Errorf("Cannot extract content length because<%s>", err)
-		return
-	}
-	body, err = fs.readBody(cl)
-	return
-}
-
-// Read events from network buffer, stop when exitChan is closed, report on errReadEvents on error and exit
-// Receive exitChan and errReadEvents as parameters so we avoid concurrency on using fs.
-func (fs *FSock) readEvents() {
-	for {
-		select {
-		case <-fs.stopReadEvents:
-			return
-		default: // Unlock waiting here
-		}
-		hdr, body, err := fs.readEvent()
-		if err != nil {
-			fs.errReadEvents <- err
-			return
-		}
-		if strings.Contains(hdr, "api/response") {
-			fs.cmdChan <- body
-		} else if strings.Contains(hdr, "command/reply") {
-			fs.cmdChan <- headerVal(hdr, "Reply-Text")
-		} else if body != "" { // We got a body, could be event, try dispatching it
-			fs.dispatchEvent(body)
-		}
-	}
-}
-
-// Subscribe to events
-func (fs *FSock) eventsPlain(events []string, bgapiSup bool) (err error) {
-	eventsCmd := "event plain"
-	customEvents := ""
-	for _, ev := range events {
-		if ev == "ALL" {
-			eventsCmd = "event plain all"
-			break
-		}
-		if strings.HasPrefix(ev, "CUSTOM") {
-			customEvents += ev[6:] // will capture here also space between CUSTOM and event
-			continue
-		}
-		eventsCmd += " " + ev
-	}
-	if eventsCmd != "event plain all" {
-		if bgapiSup {
-			eventsCmd += " BACKGROUND_JOB" // For bgapi
-		}
-		if len(customEvents) != 0 { // Add CUSTOM events subscribing in the end otherwise unexpected events are received
-			eventsCmd += " " + "CUSTOM" + customEvents
-		}
-	}
-
-	if err = fs.send(eventsCmd + "\n\n"); err != nil {
-		fs.Disconnect()
-		return
-	}
-	var rply string
-	if rply, err = fs.readHeaders(); err != nil {
-		return
-	}
-	if !strings.Contains(rply, "Reply-Text: +OK") {
-		fs.Disconnect()
-		return fmt.Errorf("Unexpected events-subscribe reply received: <%s>", rply)
-	}
-	return
-}
-
-// Enable filters
-func (fs *FSock) filterEvents(filters map[string][]string, bgapiSup bool) (err error) {
-	if len(filters) == 0 {
-		return nil
-	}
-	if bgapiSup {
-		filters["Event-Name"] = append(filters["Event-Name"], "BACKGROUND_JOB") // for bgapi
-	}
-	for hdr, vals := range filters {
-		for _, val := range vals {
-			if err = fs.send("filter " + hdr + " " + val + "\n\n"); err != nil {
-				fs.Disconnect()
-				return
-			}
-			var rply string
-			if rply, err = fs.readHeaders(); err != nil {
-				return
-			}
-			if !strings.Contains(rply, "Reply-Text: +OK") {
-				fs.Disconnect()
-				return fmt.Errorf("Unexpected filter-events reply received: <%s>", rply)
-			}
-		}
-	}
-	return nil
-}
-
-// Dispatch events to handlers in async mode
-func (fs *FSock) dispatchEvent(event string) {
-	eventName := headerVal(event, "Event-Name")
-	if eventName == "BACKGROUND_JOB" { // for bgapi BACKGROUND_JOB
-		go fs.doBackgroundJob(event)
-		return
-	}
-
-	if eventName == "CUSTOM" {
-		eventSubclass := headerVal(event, "Event-Subclass")
-		if len(eventSubclass) != 0 {
-			eventName += " " + urlDecode(eventSubclass)
-		}
-	}
-
-	for _, handleName := range []string{eventName, "ALL"} {
-		if _, hasHandlers := fs.eventHandlers[handleName]; hasHandlers {
-			// We have handlers, dispatch to all of them
-			for _, handlerFunc := range fs.eventHandlers[handleName] {
-				go handlerFunc(event, fs.connIdx)
-			}
-			return
-		}
-	}
-	fs.logger.Warning(fmt.Sprintf("<FSock> No dispatcher for event: <%+v> with event name: %s", event, eventName))
-}
-
-// bgapi event lisen fuction
-func (fs *FSock) doBackgroundJob(event string) { // add mutex protection
-	evMap := EventToMap(event)
-	jobUUID, has := evMap["Job-UUID"]
-	if !has {
-		fs.logger.Err("<FSock> BACKGROUND_JOB with no Job-UUID")
-		return
-	}
-
-	var out chan string
-	fs.fsMutex.RLock()
-	out, has = fs.backgroundChans[jobUUID]
-	fs.fsMutex.RUnlock()
-	if !has {
-		fs.logger.Err(fmt.Sprintf("<FSock> BACKGROUND_JOB with UUID %s lost!", jobUUID))
-		return // not a requested bgapi
-	}
-
-	fs.fsMutex.Lock()
-	delete(fs.backgroundChans, jobUUID)
-	fs.fsMutex.Unlock()
-
-	out <- evMap[EventBodyTag]
-}
-
-// Instantiates a new FSockPool
-func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
-	maxReconnectInterval time.Duration, delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration,
-	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
-	l logger, connIdx int, bgapiSup bool) *FSockPool {
-	if l == nil {
-		l = nopLogger{}
-	}
-	pool := &FSockPool{
-		connIdx:              connIdx,
-		fsAddr:               fsaddr,
-		fsPasswd:             fspasswd,
-		reconnects:           reconnects,
-		maxReconnectInterval: maxReconnectInterval,
-		delayFuncConstructor: delayFuncConstructor,
-		maxWaitConn:          maxWaitConn,
-		eventHandlers:        eventHandlers,
-		eventFilters:         eventFilters,
-		logger:               l,
-		allowedConns:         make(chan struct{}, maxFSocks),
-		fSocks:               make(chan *FSock, maxFSocks),
-		bgapiSup:             bgapiSup,
-	}
-	for i := 0; i < maxFSocks; i++ {
-		pool.allowedConns <- struct{}{} // Empty initiate so we do not need to wait later when we pop
-	}
-	return pool
-}
-
-// Connection handler for commands sent to FreeSWITCH
-type FSockPool struct {
-	connIdx              int
-	fsAddr               string
-	fsPasswd             string
-	reconnects           int
-	maxReconnectInterval time.Duration
-	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration
-	eventHandlers        map[string][]func(string, int)
-	eventFilters         map[string][]string
-	logger               logger
-	allowedConns         chan struct{} // Will be populated with members allowed
-	fSocks               chan *FSock   // Keep here reference towards the list of opened sockets
-	maxWaitConn          time.Duration // Maximum duration to wait for a connection to be returned by Pop
-	bgapiSup             bool
-}
-
-func (fs *FSockPool) PopFSock() (fsock *FSock, err error) {
-	if fs == nil {
-		return nil, errors.New("Unconfigured ConnectionPool")
-	}
-	if len(fs.fSocks) != 0 { // Select directly if available, so we avoid randomness of selection
-		fsock = <-fs.fSocks
-		return
-	}
-	tm := time.NewTimer(fs.maxWaitConn)
-	select { // No fsock available in the pool, wait for first one showing up
-	case fsock = <-fs.fSocks:
-		tm.Stop()
-		return
-	case <-fs.allowedConns:
-		tm.Stop()
-		return NewFSock(fs.fsAddr, fs.fsPasswd, fs.reconnects, fs.maxReconnectInterval, fs.delayFuncConstructor,
-			fs.eventHandlers, fs.eventFilters, fs.logger, fs.connIdx, fs.bgapiSup)
-	case <-tm.C:
-		return nil, ErrConnectionPoolTimeout
-	}
-}
-
-func (fs *FSockPool) PushFSock(fsk *FSock) {
-	if fs == nil { // Did not initialize the pool
-		return
-	}
-	if fsk == nil || !fsk.Connected() {
-		fs.allowedConns <- struct{}{}
-		return
-	}
-	fs.fSocks <- fsk
+	return fs.fsConn.LocalAddr()
 }

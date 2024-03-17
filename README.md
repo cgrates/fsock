@@ -62,15 +62,15 @@ func main() {
 		"CHANNEL_ANSWER":          {printChannelAnswer},
 		"CHANNEL_HANGUP_COMPLETE": {printChannelHangup},
 	}
-
-	fs, err := fsock.NewFSock("127.0.0.1:8021", "ClueCon", 10, evHandlers, evFilters, l, 0)
+	errChan := make(chan error)
+	fs, err := fsock.NewFSock("127.0.0.1:8021", "ClueCon", 10, evHandlers, evFilters, l, 0, false, errChan)
 	if err != nil {
 		l.Crit(fmt.Sprintf("FreeSWITCH error:", err))
 		return
 	}
-	fs.ReadEvents()
+	<- errChan
+
 }
 ```
 
-[![Build Status](https://secure.travis-ci.org/cgrates/fsock.png)](http://travis-ci.org/cgrates/fsock)
 

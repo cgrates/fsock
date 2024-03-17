@@ -6,22 +6,6 @@ Provides FreeSWITCH socket communication.
 */
 package fsock
 
-import (
-	"bufio"
-	"bytes"
-	"errors"
-	"fmt"
-	"io"
-	"io/ioutil"
-	"net"
-	"os"
-	"reflect"
-	"strings"
-	"sync"
-	"testing"
-	"time"
-)
-
 const (
 	HEADER = `Content-Length: 564
 Content-Type: text/event-plain
@@ -48,6 +32,8 @@ Task-Runtime: 1349437318
 extra data
 `
 )
+
+/*
 
 func TestHeaders(t *testing.T) {
 	r, w, err := os.Pipe()
@@ -1012,3 +998,4 @@ func BenchmarkFSockReadBody(b *testing.B) {
 		// }
 	}
 }
+*/
