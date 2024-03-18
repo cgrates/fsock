@@ -6,14 +6,16 @@ fsock_it_test.go is released under the MIT License <http://www.opensource.org/li
 Copyright (C) ITsysCOM. All Rights Reserved.
 
 Provides FreeSWITCH socket communication.
-
 */
 package fsock
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log/syslog"
 	"net"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -47,8 +49,8 @@ func TestFSock(t *testing.T) {
 	}
 	evFilters := make(map[string][]string)
 	evHandlers := make(map[string][]func(string, int))
-
-	fs, err := NewFSock(faddr, fpass, noreconects, 0, fibDuration, evHandlers, evFilters, l, conID, true)
+	errChan := make(chan error)
+	fs, err := NewFSock(faddr, fpass, noreconects, 0, fibDuration, evHandlers, evFilters, l, conID, true, errChan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,8 +162,8 @@ func TestFSockNewFSockNilLogger(t *testing.T) {
 	var l testLogger
 	evFilters := make(map[string][]string)
 	evHandlers := make(map[string][]func(string, int))
-
-	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, 0, fibDuration, evHandlers, evFilters, l.logger, conID, true)
+	errChan := make(chan error, 1)
+	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, 0, fibDuration, evHandlers, evFilters, l.logger, conID, true, errChan)
 	errexp := "dial tcp 127.0.0.1:1234: connect: connection refused"
 
 	if err.Error() != errexp {
@@ -176,16 +178,15 @@ func TestFSockNewFSockNilLogger(t *testing.T) {
 func TestFSockconnect(t *testing.T) {
 	const fsaddr = "127.0.0.1:8989"
 	fs := &FSock{
-		fsMutex:         &sync.RWMutex{},
-		fsaddress:       fsaddr,
-		fspaswd:         "pass",
-		eventHandlers:   make(map[string][]func(string, int)),
-		eventFilters:    make(map[string][]string),
-		backgroundChans: make(map[string]chan string),
-		cmdChan:         make(chan string),
-		reconnects:      -1,
-		delayFunc:       fibDuration,
-		logger:          nopLogger{},
+		fsMux:         &sync.RWMutex{},
+		fsAddr:        fsaddr,
+		fsPasswd:      "pass",
+		eventHandlers: make(map[string][]func(string, int)),
+		eventFilters:  make(map[string][]string),
+		stopError:     make(chan error),
+		reconnects:    -1,
+		delayFunc:     fibDuration,
+		logger:        nopLogger{},
 	}
 	l, err := net.Listen("tcp", fsaddr)
 	if err != nil {
@@ -204,7 +205,7 @@ func TestFSockconnect(t *testing.T) {
 		conn.Close()
 	}()
 	experr1 := "Received error<EOF> when receiving the auth challenge"
-	if err := fs.connect(); err.Error() != experr1 {
+	if err := fs.connect(); !errors.Is(err, io.EOF) {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", experr1, err)
 	}
 	go func() {
@@ -219,7 +220,7 @@ func TestFSockconnect(t *testing.T) {
 		}
 		conn.Close()
 	}()
-	experr2 := "No auth challenge received"
+	experr2 := "no auth challenge received"
 	if err := fs.connect(); err.Error() != experr2 {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", experr2, err)
 	}
@@ -249,7 +250,7 @@ func TestFSockconnect(t *testing.T) {
 		}
 		conn.Close()
 	}()
-	experr3 := "Unexpected auth reply received: <Content-Type: command/reply\nReply-Text:  accepted\n>"
+	experr3 := "unexpected auth reply received: <Content-Type: command/reply\nReply-Text:  accepted\n>"
 	if err := fs.connect(); err.Error() != experr3 {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", experr3, err)
 	}
@@ -344,4 +345,47 @@ func TestFSockconnect(t *testing.T) {
 	if err := fs.connect(); err.Error() != experr5 {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", experr5, err)
 	}
+}
+
+func TestFSockPool(t *testing.T) {
+	faddr := "127.0.0.1:8989"
+	fpass := "pass"
+	noreconects := 10
+	conID := 0
+	maxFs := 5
+	l, errLog := syslog.New(syslog.LOG_INFO, "TestFSock")
+	if errLog != nil {
+		t.Fatal(errLog)
+	}
+	evFilters := make(map[string][]string)
+	evHandlers := make(map[string][]func(string, int))
+	errChan := make(chan error)
+	fsPool := NewFSockPool(maxFs, faddr, fpass, noreconects, 0, 0, fibDuration, evHandlers, evFilters, l, conID, true, errChan)
+	if errLog != nil {
+		t.Fatal(errLog)
+	}
+	faddr = "127.0.0.1:8021"
+	fpass = "ClueCon"
+
+	fs, err := NewFSock(faddr, fpass, noreconects, 0, fibDuration, evHandlers, evFilters, l, conID, true, errChan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fs.Connected() {
+		t.Errorf("Coudn't connect to freeswitch!")
+	}
+
+	fsPool.PushFSock(fs)
+	if len(fsPool.fSocks) != 1 {
+		t.Errorf("Expected len 1 ")
+	}
+
+	if fsRpl, err := fsPool.PopFSock(); err != nil {
+		t.Error(err)
+	} else if !reflect.DeepEqual(fs, fsRpl) {
+		t.Errorf("expected %v,received %v", fs, fsRpl)
+	} else if len(fsPool.fSocks) != 0 {
+		t.Errorf("Expected len 1 ")
+	}
+
 }

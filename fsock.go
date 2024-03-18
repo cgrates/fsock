@@ -213,7 +213,7 @@ func (fs *FSock) SendEvent(eventSubclass string, eventParams map[string]string) 
 func (fs *FSock) SendBgapiCmd(cmdStr string) (out chan string, err error) {
 	fs.fsMux.Lock()
 	defer fs.fsMux.Unlock()
-	fs.ReconnectIfNeeded()
+	fs.reconnectIfNeeded()
 	return fs.fsConn.SendBgapiCmd(cmdStr)
 }
 
