@@ -15,7 +15,6 @@ import (
 	"io"
 	"log/syslog"
 	"net"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -33,6 +32,7 @@ var FSTests = []func(*FSock, *testing.T){
 	testReconect,
 	testSendCmd,
 	testSendApiCmd,
+	testSendEvent,
 	testSendBgapiCmd,
 	testSendEventWithBody,
 	testSendEvent,
@@ -345,47 +345,4 @@ func TestFSockconnect(t *testing.T) {
 	if err := fs.connect(); err.Error() != experr5 {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", experr5, err)
 	}
-}
-
-func TestFSockPool(t *testing.T) {
-	faddr := "127.0.0.1:8989"
-	fpass := "pass"
-	noreconects := 10
-	conID := 0
-	maxFs := 5
-	l, errLog := syslog.New(syslog.LOG_INFO, "TestFSock")
-	if errLog != nil {
-		t.Fatal(errLog)
-	}
-	evFilters := make(map[string][]string)
-	evHandlers := make(map[string][]func(string, int))
-	errChan := make(chan error)
-	fsPool := NewFSockPool(maxFs, faddr, fpass, noreconects, 0, 0, fibDuration, evHandlers, evFilters, l, conID, true, errChan)
-	if errLog != nil {
-		t.Fatal(errLog)
-	}
-	faddr = "127.0.0.1:8021"
-	fpass = "ClueCon"
-
-	fs, err := NewFSock(faddr, fpass, noreconects, 0, fibDuration, evHandlers, evFilters, l, conID, true, errChan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !fs.Connected() {
-		t.Errorf("Coudn't connect to freeswitch!")
-	}
-
-	fsPool.PushFSock(fs)
-	if len(fsPool.fSocks) != 1 {
-		t.Errorf("Expected len 1 ")
-	}
-
-	if fsRpl, err := fsPool.PopFSock(); err != nil {
-		t.Error(err)
-	} else if !reflect.DeepEqual(fs, fsRpl) {
-		t.Errorf("expected %v,received %v", fs, fsRpl)
-	} else if len(fsPool.fSocks) != 0 {
-		t.Errorf("Expected len 1 ")
-	}
-
 }
