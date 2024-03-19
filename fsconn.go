@@ -18,24 +18,29 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
-// NewFSConn constructs and connects a FSConn
-func NewFSConn(fsAddr, fsPasswd string,
-	connIdx int, lgr logger,
+// NewFSConn constructs and connects a FSConn.
+func NewFSConn(fsAddr, fsPasswd string, connIdx int,
+	lgr logger, replyTimeout time.Duration,
 	evFilters map[string][]string,
 	eventHandlers map[string][]func(string, int),
-	bgapi bool, stopReadEvents chan struct{},
-	readEventsFStopped chan struct{}) (fsConn *FSConn, err error) {
+	bgapi bool, fsClosedChan chan struct{},
+) (fsConn *FSConn, err error) {
 
-	fsConn = &FSConn{connIdx: connIdx, lgr: lgr, fsPasswd: fsPasswd,
-		eventHandlers:      eventHandlers,
-		repliesChan:        make(chan string),
-		stopReadEvents:     stopReadEvents,
-		readEventsFStopped: readEventsFStopped,
-		errorsChan:         make(chan error),
-		bgapiChan:          make(map[string]chan string),
-		bgapiMux:           new(sync.RWMutex)}
+	fsConn = &FSConn{
+		connIdx:        connIdx,
+		lgr:            lgr,
+		replyTimeout:   replyTimeout,
+		eventHandlers:  eventHandlers,
+		repliesChan:    make(chan string),
+		errorsChan:     make(chan error),
+		stopReadEvents: make(chan struct{}),
+		fsClosedChan:   fsClosedChan,
+		bgapiChan:      make(map[string]chan string),
+		bgapiMux:       new(sync.RWMutex),
+	}
 
 	// Build the TCP connection and the buffer reading it
 	if fsConn.conn, err = net.Dial("tcp", fsAddr); err != nil {
@@ -56,7 +61,7 @@ func NewFSConn(fsAddr, fsPasswd string,
 		return nil, errors.New("no auth challenge received")
 	}
 
-	if err = fsConn.auth(); err != nil { // Auth did not succeed
+	if err = fsConn.auth(fsPasswd); err != nil { // Auth did not succeed
 		return
 	}
 
@@ -69,7 +74,7 @@ func NewFSConn(fsAddr, fsPasswd string,
 		return
 	}
 
-	go fsConn.readEvents() // Fork read events in it's own goroutine
+	go fsConn.readEvents() // Fork read events in its own goroutine
 
 	return
 
@@ -77,18 +82,18 @@ func NewFSConn(fsAddr, fsPasswd string,
 
 // FSConn represents one connection to FreeSWITCH
 type FSConn struct {
-	connIdx            int // Indetifier for the component using this instance of FSock, optional
-	conn               net.Conn
-	rdr                *bufio.Reader
-	lgr                logger
-	fsPasswd           string
-	repliesChan        chan string
-	stopReadEvents     chan struct{}
-	readEventsFStopped chan struct{}
-	errorsChan         chan error
-	eventHandlers      map[string][]func(string, int) // eventStr, connId
-	bgapiChan          map[string]chan string         // used by bgapi
-	bgapiMux           *sync.RWMutex                  // protects hte bgapiChan map
+	connIdx        int // Identifier for the component using this instance of FSock, optional
+	conn           net.Conn
+	rdr            *bufio.Reader
+	lgr            logger
+	replyTimeout   time.Duration
+	repliesChan    chan string
+	errorsChan     chan error
+	stopReadEvents chan struct{}
+	fsClosedChan   chan struct{}
+	eventHandlers  map[string][]func(string, int) // eventStr, connId
+	bgapiChan      map[string]chan string         // used by bgapi
+	bgapiMux       *sync.RWMutex                  // protects the bgapiChan map
 }
 
 // readHeaders reads the headers part out of FreeSWITCH answer
@@ -112,8 +117,8 @@ func (fsConn *FSConn) readHeaders() (header string, err error) {
 }
 
 // Auth to FS
-func (fsConn *FSConn) auth() (err error) {
-	if err = fsConn.send("auth " + fsConn.fsPasswd + "\n\n"); err != nil {
+func (fsConn *FSConn) auth(fsPasswd string) (err error) {
+	if err = fsConn.send("auth " + fsPasswd + "\n\n"); err != nil {
 		fsConn.conn.Close()
 		return
 	}
@@ -157,8 +162,8 @@ func (fsConn *FSConn) filterEvents(filters map[string][]string, bgapi bool) (err
 }
 
 // send will send the content over the connection
-func (fsConn *FSConn) send(sendContent string) (err error) {
-	if _, err = fsConn.conn.Write([]byte(sendContent)); err != nil {
+func (fsConn *FSConn) send(payload string) (err error) {
+	if _, err = fsConn.conn.Write([]byte(payload)); err != nil {
 		fsConn.lgr.Err(fmt.Sprintf("<FSock> Cannot write command to socket <%s>", err.Error()))
 	}
 	return
@@ -245,7 +250,7 @@ func (fsConn *FSConn) readEvents() {
 		hdr, body, err := fsConn.readEvent()
 		if err != nil {
 			if err == io.EOF {
-				fsConn.readEventsFStopped <- struct{}{}
+				close(fsConn.fsClosedChan)
 				return // not pushing the error since most probably nobody listens and the channel can be blocked
 			}
 			fsConn.errorsChan <- err
@@ -311,15 +316,21 @@ func (fsConn *FSConn) doBackgroundJob(event string) { // add mutex protection
 }
 
 // Send will send the content over the connection, exposing synchronous interface outside
-func (fsConn *FSConn) Send(sndContent string) (rply string, err error) {
-	if err = fsConn.send(sndContent); err != nil {
-		return
+func (fsConn *FSConn) Send(payload string) (reply string, err error) {
+	if err = fsConn.send(payload); err != nil {
+		return "", err
 	}
-	rply = <-fsConn.repliesChan
-	if strings.Contains(rply, "-ERR") {
-		return "", errors.New(strings.TrimSpace(rply))
+	select {
+	case reply = <-fsConn.repliesChan:
+		if strings.Contains(reply, "-ERR") {
+			return "", errors.New(strings.TrimSpace(reply))
+		}
+		return reply, nil
+	case err := <-fsConn.errorsChan:
+		return "", err
+	case <-time.After(fsConn.replyTimeout):
+		return "", errors.New("timeout waiting for FreeSWITCH reply")
 	}
-	return
 }
 
 // Send BGAPI command

@@ -10,6 +10,7 @@ package fsock
 
 import (
 	"errors"
+	"reflect"
 	"time"
 )
 
@@ -17,8 +18,10 @@ import (
 func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
 	maxReconnectInterval time.Duration, delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration,
 	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
-	l logger, connIdx int, bgapi bool, stopError chan error) *FSockPool {
-	if l == nil {
+	replyTimeout time.Duration, l logger, connIdx int, bgapi bool,
+	stopError chan error) *FSockPool {
+	if l == nil ||
+		(reflect.ValueOf(l).Kind() == reflect.Ptr && reflect.ValueOf(l).IsNil()) {
 		l = nopLogger{}
 	}
 	pool := &FSockPool{
@@ -31,6 +34,7 @@ func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWai
 		maxWaitConn:          maxWaitConn,
 		eventHandlers:        eventHandlers,
 		eventFilters:         eventFilters,
+		replyTimeout:         replyTimeout,
 		logger:               l,
 		allowedConns:         make(chan struct{}, maxFSocks),
 		fSocks:               make(chan *FSock, maxFSocks),
@@ -53,6 +57,7 @@ type FSockPool struct {
 	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration
 	eventHandlers        map[string][]func(string, int)
 	eventFilters         map[string][]string
+	replyTimeout         time.Duration
 	logger               logger
 	allowedConns         chan struct{} // Will be populated with members allowed
 	fSocks               chan *FSock   // Keep here reference towards the list of opened sockets
@@ -63,7 +68,7 @@ type FSockPool struct {
 
 func (fs *FSockPool) PopFSock() (fsock *FSock, err error) {
 	if fs == nil {
-		return nil, errors.New("Unconfigured ConnectionPool")
+		return nil, errors.New("unconfigured connection pool")
 	}
 	if len(fs.fSocks) != 0 { // Select directly if available, so we avoid randomness of selection
 		fsock = <-fs.fSocks
@@ -77,7 +82,7 @@ func (fs *FSockPool) PopFSock() (fsock *FSock, err error) {
 	case <-fs.allowedConns:
 		tm.Stop()
 		return NewFSock(fs.fsAddr, fs.fsPasswd, fs.reconnects, fs.maxReconnectInterval, fs.delayFuncConstructor,
-			fs.eventHandlers, fs.eventFilters, fs.logger, fs.connIdx, fs.bgapi, fs.stopError)
+			fs.eventHandlers, fs.eventFilters, fs.replyTimeout, fs.logger, fs.connIdx, fs.bgapi, fs.stopError)
 	case <-tm.C:
 		return nil, ErrConnectionPoolTimeout
 	}

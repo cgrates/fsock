@@ -124,11 +124,10 @@ func TestReadEvents(t *testing.T) {
 
 func TestFSockConnect(t *testing.T) {
 	fs := &FSock{
-		fsMux:          new(sync.RWMutex),
-		eventHandlers:  make(map[string][]func(string, int)),
-		eventFilters:   make(map[string][]string),
-		stopReadEvents: make(chan struct{}),
-		logger:         nopLogger{},
+		fsMux:         new(sync.RWMutex),
+		eventHandlers: make(map[string][]func(string, int)),
+		eventFilters:  make(map[string][]string),
+		logger:        nopLogger{},
 	}
 
 	err := fs.Connect()
@@ -261,7 +260,7 @@ func TestFSockAuthFailSend(t *testing.T) {
 		lgr:  nopLogger{},
 		conn: new(connMock),
 	}
-	err := fs.auth()
+	err := fs.auth("")
 
 	if err == nil || err != ErrConnectionPoolTimeout {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", ErrConnectionPoolTimeout, err)
@@ -271,14 +270,13 @@ func TestFSockAuthFailSend(t *testing.T) {
 func TestFSockAuthFailReply(t *testing.T) {
 	buf := new(bytes.Buffer)
 	fs := &FSConn{
-		fsPasswd: "test",
-		conn:     &connMock2{buf: buf},
-		rdr:      bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted\n\n"))),
-		lgr:      new(nopLogger),
+		conn: &connMock2{buf: buf},
+		rdr:  bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted\n\n"))),
+		lgr:  new(nopLogger),
 	}
 
 	expected := fmt.Sprintf("unexpected auth reply received: <%s>", strings.TrimSuffix(HEADER, "\n"))
-	err := fs.auth()
+	err := fs.auth("test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +288,7 @@ func TestFSockAuthFailReply(t *testing.T) {
 
 	buf.Reset()
 	fs.rdr = bufio.NewReader(bytes.NewBuffer([]byte(HEADER)))
-	err = fs.auth()
+	err = fs.auth("test")
 
 	if err == nil || err.Error() != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err.Error())
@@ -303,13 +301,12 @@ func TestFSockAuthFailReply(t *testing.T) {
 
 func TestFSockAuthFailRead(t *testing.T) {
 	fs := &FSConn{
-		fsPasswd: "test",
-		rdr:      bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted"))),
-		lgr:      new(nopLogger),
-		conn:     new(connMock3),
+		rdr:  bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted"))),
+		lgr:  new(nopLogger),
+		conn: new(connMock3),
 	}
 	expected := io.EOF
-	err := fs.auth()
+	err := fs.auth("test")
 
 	if err == nil || err != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
@@ -369,9 +366,8 @@ func TestFSockLocalAddrNotConnected(t *testing.T) {
 
 func TestFSockReadEvents(t *testing.T) {
 	fs := &FSock{
-		fsMux:          &sync.RWMutex{},
-		delayFunc:      fibDuration,
-		stopReadEvents: make(chan struct{}),
+		fsMux:     &sync.RWMutex{},
+		delayFunc: fibDuration,
 	}
 
 	expected := "not connected to FreeSWITCH"
@@ -413,9 +409,10 @@ func TestFSockSendCmdErrSend(t *testing.T) {
 
 func TestFSockSendCmdErrContains(t *testing.T) {
 	fs := &FSConn{
-		lgr:         nopLogger{},
-		conn:        &connMock3{},
-		repliesChan: make(chan string, 1),
+		lgr:          nopLogger{},
+		conn:         &connMock3{},
+		replyTimeout: 2 * time.Second,
+		repliesChan:  make(chan string, 1),
 	}
 
 	fs.repliesChan <- "test-ERR"
@@ -731,12 +728,13 @@ func TestFSockNewFSockPool(t *testing.T) {
 		eventHandlers: evHandlers,
 		eventFilters:  evFilters,
 		bgapi:         true,
+		replyTimeout:  2 * time.Second,
 		logger:        nopLogger{},
 		allowedConns:  nil,
 		fSocks:        nil,
 		stopError:     chanErr,
 	}
-	fsnew := NewFSockPool(maxFSocks, fsaddr, fspw, reconns, maxWait, 0, fibDuration, evHandlers, evFilters, nil, connIdx, true, chanErr)
+	fsnew := NewFSockPool(maxFSocks, fsaddr, fspw, reconns, maxWait, 0, fibDuration, evHandlers, evFilters, 2*time.Second, nil, connIdx, true, chanErr)
 	fsnew.allowedConns = nil
 	fsnew.fSocks = nil
 	fsnew.delayFuncConstructor = nil
@@ -784,7 +782,7 @@ func TestFSockPushFSock(t *testing.T) {
 func TestFSockPopFSockEmpty(t *testing.T) {
 	var fs *FSockPool
 
-	expected := "Unconfigured ConnectionPool"
+	expected := "unconfigured connection pool"
 	fsk, err := fs.PopFSock()
 
 	if err == nil || err.Error() != expected {

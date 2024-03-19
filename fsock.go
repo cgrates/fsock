@@ -10,6 +10,7 @@ package fsock
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"reflect"
@@ -26,7 +27,8 @@ var (
 func NewFSock(fsaddr, fsPasswd string, reconnects int, maxReconnectInterval time.Duration,
 	delayFunc func(time.Duration, time.Duration) func() time.Duration,
 	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
-	l logger, connIdx int, bgapi bool, stopError chan error) (fsock *FSock, err error) {
+	replyTimeout time.Duration, l logger, connIdx int, bgapi bool,
+	stopError chan error) (fsock *FSock, err error) {
 	if l == nil ||
 		(reflect.ValueOf(l).Kind() == reflect.Ptr && reflect.ValueOf(l).IsNil()) {
 		l = nopLogger{}
@@ -41,6 +43,7 @@ func NewFSock(fsaddr, fsPasswd string, reconnects int, maxReconnectInterval time
 		reconnects:           reconnects,
 		maxReconnectInterval: maxReconnectInterval,
 		delayFunc:            delayFunc,
+		replyTimeout:         replyTimeout,
 		logger:               l,
 		bgapi:                bgapi,
 		stopError:            stopError,
@@ -55,7 +58,7 @@ func NewFSock(fsaddr, fsPasswd string, reconnects int, maxReconnectInterval time
 type FSock struct {
 	fsMux                *sync.RWMutex
 	fsConn               *FSConn
-	connIdx              int // Indetifier for the component using this instance of FSock, optional
+	connIdx              int // Identifier for the component using this instance of FSock, optional
 	fsAddr               string
 	fsPasswd             string
 	eventFilters         map[string][]string
@@ -63,8 +66,7 @@ type FSock struct {
 	reconnects           int
 	maxReconnectInterval time.Duration
 	delayFunc            func(time.Duration, time.Duration) func() time.Duration // used to create/reset the delay function
-	stopReadEvents       chan struct{}                                           // Keep a reference towards forkedReadEvents so we can stop them whenever necessary
-	readEventsFStopped   chan struct{}                                           // FSConn will signal the abormal disconnect
+	replyTimeout         time.Duration                                           // specifies the duration to wait for a reply from readEvents
 	logger               logger
 	bgapi                bool
 	stopError            chan error // will communicate on final disconnect
@@ -79,25 +81,27 @@ func (fs *FSock) Connect() (err error) {
 
 // Connect is a non-thread safe connect method
 func (fs *FSock) connect() (err error) {
-	// Reinit readEvents channels so we avoid concurrency issues between goroutines
-	fs.stopReadEvents = make(chan struct{})
-	fs.readEventsFStopped = make(chan struct{})
-	fs.fsConn, err = NewFSConn(fs.fsAddr, fs.fsPasswd,
-		fs.connIdx, fs.logger,
-		fs.eventFilters, fs.eventHandlers,
-		fs.bgapi, fs.stopReadEvents, fs.readEventsFStopped)
+	fsStoppedChan := make(chan struct{}) // signals abnormal FreeSWITCH disconnect
+	fs.fsConn, err = NewFSConn(fs.fsAddr, fs.fsPasswd, fs.connIdx,
+		fs.logger, fs.replyTimeout, fs.eventFilters, fs.eventHandlers,
+		fs.bgapi, fsStoppedChan)
 	if err != nil {
-		return
+		return err
 	}
 	go func() { // automatic restart if the connection was dropped due to read errors
-		if forced := <-fs.readEventsFStopped; forced == struct{}{} {
-			fs.fsMux.RLock()
-			defer fs.fsMux.RUnlock()
-			fs.disconnect()
-			fs.reconnectIfNeeded()
-			if !fs.connected() {
-				fs.stopError <- io.EOF // signal to external sources that we will not attempt reconnect
-			}
+		<-fsStoppedChan
+		fs.fsMux.RLock()
+		defer fs.fsMux.RUnlock()
+		if err := fs.disconnect(); err != nil {
+			fs.logger.Warning(fmt.Sprintf(
+				"<FSock> Failed to disconnect from FreeSWITCH (connection index: %d): %v",
+				fs.connIdx, err))
+		}
+		if err := fs.reconnectIfNeeded(); err != nil {
+			fs.logger.Err(fmt.Sprintf(
+				"<FSock> Failed to reconnect to FreeSWITCH (connection index: %d): %v",
+				fs.connIdx, err))
+			fs.stopError <- io.EOF // signal to external sources that we will not attempt reconnect
 		}
 	}()
 	return
