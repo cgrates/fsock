@@ -14,24 +14,33 @@ import (
 )
 
 // Instantiates a new FSockPool
-func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWaitConn time.Duration,
-	maxReconnectInterval time.Duration, delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration,
-	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
-	l logger, connIdx int, bgapi bool, stopError chan error) *FSockPool {
-	if l == nil {
-		l = nopLogger{}
+func NewFSockPool(maxFSocks int,
+	addr, passwd string,
+	reconnects int,
+	maxWaitConn, maxReconnectInterval, replyTimeout time.Duration,
+	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration,
+	eventHandlers map[string][]func(string, int),
+	eventFilters map[string][]string,
+	logger logger,
+	connIdx int,
+	bgapi bool,
+	stopError chan error,
+) *FSockPool {
+	if logger == nil {
+		logger = nopLogger{}
 	}
 	pool := &FSockPool{
 		connIdx:              connIdx,
-		fsAddr:               fsaddr,
-		fsPasswd:             fspasswd,
+		addr:                 addr,
+		passwd:               passwd,
 		reconnects:           reconnects,
 		maxReconnectInterval: maxReconnectInterval,
+		replyTimeout:         replyTimeout,
 		delayFuncConstructor: delayFuncConstructor,
 		maxWaitConn:          maxWaitConn,
 		eventHandlers:        eventHandlers,
 		eventFilters:         eventFilters,
-		logger:               l,
+		logger:               logger,
 		allowedConns:         make(chan struct{}, maxFSocks),
 		fSocks:               make(chan *FSock, maxFSocks),
 		bgapi:                bgapi,
@@ -46,24 +55,25 @@ func NewFSockPool(maxFSocks int, fsaddr, fspasswd string, reconnects int, maxWai
 // Connection handler for commands sent to FreeSWITCH
 type FSockPool struct {
 	connIdx              int
-	fsAddr               string
-	fsPasswd             string
+	addr                 string
+	passwd               string
 	reconnects           int
 	maxReconnectInterval time.Duration
+	replyTimeout         time.Duration
 	delayFuncConstructor func(time.Duration, time.Duration) func() time.Duration
+	maxWaitConn          time.Duration // Maximum duration to wait for a connection to be returned by Pop
 	eventHandlers        map[string][]func(string, int)
 	eventFilters         map[string][]string
 	logger               logger
 	allowedConns         chan struct{} // Will be populated with members allowed
 	fSocks               chan *FSock   // Keep here reference towards the list of opened sockets
-	maxWaitConn          time.Duration // Maximum duration to wait for a connection to be returned by Pop
 	bgapi                bool
 	stopError            chan error
 }
 
 func (fs *FSockPool) PopFSock() (fsock *FSock, err error) {
 	if fs == nil {
-		return nil, errors.New("Unconfigured ConnectionPool")
+		return nil, errors.New("unconfigured connection pool")
 	}
 	if len(fs.fSocks) != 0 { // Select directly if available, so we avoid randomness of selection
 		fsock = <-fs.fSocks
@@ -76,7 +86,7 @@ func (fs *FSockPool) PopFSock() (fsock *FSock, err error) {
 		return
 	case <-fs.allowedConns:
 		tm.Stop()
-		return NewFSock(fs.fsAddr, fs.fsPasswd, fs.reconnects, fs.maxReconnectInterval, fs.delayFuncConstructor,
+		return NewFSock(fs.addr, fs.passwd, fs.reconnects, fs.replyTimeout, fs.maxReconnectInterval, fs.delayFuncConstructor,
 			fs.eventHandlers, fs.eventFilters, fs.logger, fs.connIdx, fs.bgapi, fs.stopError)
 	case <-tm.C:
 		return nil, ErrConnectionPoolTimeout

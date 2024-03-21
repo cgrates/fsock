@@ -50,7 +50,7 @@ func TestFSock(t *testing.T) {
 	evFilters := make(map[string][]string)
 	evHandlers := make(map[string][]func(string, int))
 	errChan := make(chan error)
-	fs, err := NewFSock(faddr, fpass, noreconects, 0, fibDuration, evHandlers, evFilters, l, conID, true, errChan)
+	fs, err := NewFSock(faddr, fpass, noreconects, 0, 5*time.Second, fibDuration, evHandlers, evFilters, l, conID, true, errChan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +163,7 @@ func TestFSockNewFSockNilLogger(t *testing.T) {
 	evFilters := make(map[string][]string)
 	evHandlers := make(map[string][]func(string, int))
 	errChan := make(chan error, 1)
-	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, 0, fibDuration, evHandlers, evFilters, l.logger, conID, true, errChan)
+	fs, err := NewFSock(fsaddr, fpaswd, noreconnects, 0, 5*time.Second, fibDuration, evHandlers, evFilters, l.logger, conID, true, errChan)
 	errexp := "dial tcp 127.0.0.1:1234: connect: connection refused"
 
 	if err.Error() != errexp {
@@ -178,9 +178,9 @@ func TestFSockNewFSockNilLogger(t *testing.T) {
 func TestFSockconnect(t *testing.T) {
 	const fsaddr = "127.0.0.1:8989"
 	fs := &FSock{
-		fsMux:         &sync.RWMutex{},
-		fsAddr:        fsaddr,
-		fsPasswd:      "pass",
+		mu:            &sync.RWMutex{},
+		addr:          fsaddr,
+		passwd:        "pass",
 		eventHandlers: make(map[string][]func(string, int)),
 		eventFilters:  make(map[string][]string),
 		stopError:     make(chan error),

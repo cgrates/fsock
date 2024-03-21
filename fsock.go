@@ -20,27 +20,33 @@ import (
 
 var (
 	ErrConnectionPoolTimeout = errors.New("ConnectionPool timeout")
-	ErrDisconnected          = errors.New("DISCONNECTED")
 )
 
-// NewFSock connects to FS and starts buffering input
-func NewFSock(fsaddr, fsPasswd string, reconnects int, maxReconnectInterval time.Duration,
+// NewFSock connects to FS and starts buffering input.
+func NewFSock(addr, passwd string, reconnects int,
+	maxReconnectInterval, replyTimeout time.Duration,
 	delayFunc func(time.Duration, time.Duration) func() time.Duration,
-	eventHandlers map[string][]func(string, int), eventFilters map[string][]string,
-	l logger, connIdx int, bgapi bool, stopError chan error) (fsock *FSock, err error) {
+	eventHandlers map[string][]func(string, int),
+	eventFilters map[string][]string,
+	l logger, connIdx int, bgapi bool, stopError chan error,
+) (fsock *FSock, err error) {
 	if l == nil ||
 		(reflect.ValueOf(l).Kind() == reflect.Ptr && reflect.ValueOf(l).IsNil()) {
 		l = nopLogger{}
 	}
+	if replyTimeout == 0 {
+		replyTimeout = time.Minute // default value, if unset
+	}
 	fsock = &FSock{
-		fsMux:                new(sync.RWMutex),
+		mu:                   new(sync.RWMutex),
 		connIdx:              connIdx,
-		fsAddr:               fsaddr,
-		fsPasswd:             fsPasswd,
+		addr:                 addr,
+		passwd:               passwd,
 		eventFilters:         eventFilters,
 		eventHandlers:        eventHandlers,
 		reconnects:           reconnects,
 		maxReconnectInterval: maxReconnectInterval,
+		replyTimeout:         replyTimeout,
 		delayFunc:            delayFunc,
 		logger:               l,
 		bgapi:                bgapi,
@@ -54,25 +60,29 @@ func NewFSock(fsaddr, fsPasswd string, reconnects int, maxReconnectInterval time
 
 // FSock reperesents the connection to FreeSWITCH Socket
 type FSock struct {
-	fsMux                *sync.RWMutex
-	fsConn               *FSConn
-	connIdx              int // Indetifier for the component using this instance of FSock, optional
-	fsAddr               string
-	fsPasswd             string
-	eventFilters         map[string][]string
-	eventHandlers        map[string][]func(string, int) // eventStr, connId
+	mu      *sync.RWMutex
+	connIdx int // identifier for the component using this instance of FSock, optional
+	addr    string
+	passwd  string
+	fsConn  *FSConn
+
 	reconnects           int
 	maxReconnectInterval time.Duration
+	replyTimeout         time.Duration
 	delayFunc            func(time.Duration, time.Duration) func() time.Duration // used to create/reset the delay function
-	logger               logger
-	bgapi                bool
-	stopError            chan error // will communicate on final disconnect
+
+	eventFilters  map[string][]string
+	eventHandlers map[string][]func(string, int) // eventStr, connId
+
+	logger    logger
+	bgapi     bool
+	stopError chan error // will communicate on final disconnect
 }
 
-// Connect adds loking to connect method
+// Connect adds locking to connect method.
 func (fs *FSock) Connect() (err error) {
-	fs.fsMux.Lock()
-	defer fs.fsMux.Unlock()
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	return fs.connect()
 }
 
@@ -86,7 +96,7 @@ func (fs *FSock) connect() (err error) {
 	connErr := make(chan error)
 
 	// Initialize a new FSConn connection instance. Pass configuration and the error channel.
-	fs.fsConn, err = NewFSConn(fs.fsAddr, fs.fsPasswd, fs.connIdx, connErr,
+	fs.fsConn, err = NewFSConn(fs.addr, fs.passwd, fs.connIdx, fs.replyTimeout, connErr,
 		fs.logger, fs.eventFilters, fs.eventHandlers, fs.bgapi)
 	if err != nil {
 		return err
@@ -124,8 +134,8 @@ func (fs *FSock) handleConnectionError(connErr chan error) {
 	}
 
 	// Attempt to reconnect if the error indicates a dropped connection (io.EOF).
-	fs.fsMux.RLock()
-	defer fs.fsMux.RUnlock()
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
 
 	if err := fs.disconnect(); err != nil {
 		fs.logger.Warning(fmt.Sprintf(
@@ -141,8 +151,8 @@ func (fs *FSock) handleConnectionError(connErr chan error) {
 
 // Connected adds up locking on top of normal connected method.
 func (fs *FSock) Connected() (ok bool) {
-	fs.fsMux.RLock()
-	defer fs.fsMux.RUnlock()
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
 	return fs.connected()
 }
 
@@ -153,8 +163,8 @@ func (fs *FSock) connected() (ok bool) {
 
 // Disconnect adds up locking for disconnect
 func (fs *FSock) Disconnect() (err error) {
-	fs.fsMux.Lock()
-	defer fs.fsMux.Unlock()
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	return fs.disconnect()
 }
 
@@ -170,8 +180,8 @@ func (fs *FSock) disconnect() (err error) {
 
 // ReconnectIfNeeded adds up locking to reconnectIfNeeded
 func (fs *FSock) ReconnectIfNeeded() (err error) {
-	fs.fsMux.Lock()
-	defer fs.fsMux.Unlock()
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	return fs.reconnectIfNeeded()
 }
 
@@ -195,8 +205,8 @@ func (fs *FSock) reconnectIfNeeded() (err error) {
 
 // Generic proxy for commands
 func (fs *FSock) SendCmd(cmdStr string) (rply string, err error) {
-	fs.fsMux.Lock() // make sure the fsConn does not get nil-ed after the reconnect
-	defer fs.fsMux.Unlock()
+	fs.mu.Lock() // make sure the fsConn does not get nil-ed after the reconnect
+	defer fs.mu.Unlock()
 	if err = fs.reconnectIfNeeded(); err != nil {
 		return
 	}
@@ -247,8 +257,8 @@ func (fs *FSock) SendEvent(eventSubclass string, eventParams map[string]string) 
 
 // Send BGAPI command
 func (fs *FSock) SendBgapiCmd(cmdStr string) (out chan string, err error) {
-	fs.fsMux.Lock()
-	defer fs.fsMux.Unlock()
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	if err := fs.reconnectIfNeeded(); err != nil {
 		return out, err
 	}
@@ -256,8 +266,8 @@ func (fs *FSock) SendBgapiCmd(cmdStr string) (out chan string, err error) {
 }
 
 func (fs *FSock) LocalAddr() net.Addr {
-	fs.fsMux.RLock()
-	defer fs.fsMux.RUnlock()
+	fs.mu.RLock()
+	defer fs.mu.RUnlock()
 	if !fs.connected() {
 		return nil
 	}
