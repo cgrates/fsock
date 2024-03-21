@@ -124,7 +124,7 @@ func TestReadEvents(t *testing.T) {
 
 func TestFSockConnect(t *testing.T) {
 	fs := &FSock{
-		fsMux:         new(sync.RWMutex),
+		mu:            new(sync.RWMutex),
 		eventHandlers: make(map[string][]func(string, int)),
 		eventFilters:  make(map[string][]string),
 		logger:        nopLogger{},
@@ -260,7 +260,7 @@ func TestFSockAuthFailSend(t *testing.T) {
 		lgr:  nopLogger{},
 		conn: new(connMock),
 	}
-	err := fs.auth()
+	err := fs.auth("")
 
 	if err == nil || err != ErrConnectionPoolTimeout {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", ErrConnectionPoolTimeout, err)
@@ -270,14 +270,13 @@ func TestFSockAuthFailSend(t *testing.T) {
 func TestFSockAuthFailReply(t *testing.T) {
 	buf := new(bytes.Buffer)
 	fs := &FSConn{
-		fsPasswd: "test",
-		conn:     &connMock2{buf: buf},
-		rdr:      bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted\n\n"))),
-		lgr:      new(nopLogger),
+		conn: &connMock2{buf: buf},
+		rdr:  bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted\n\n"))),
+		lgr:  new(nopLogger),
 	}
 
 	expected := fmt.Sprintf("unexpected auth reply received: <%s>", strings.TrimSuffix(HEADER, "\n"))
-	err := fs.auth()
+	err := fs.auth("test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +288,7 @@ func TestFSockAuthFailReply(t *testing.T) {
 
 	buf.Reset()
 	fs.rdr = bufio.NewReader(bytes.NewBuffer([]byte(HEADER)))
-	err = fs.auth()
+	err = fs.auth("test")
 
 	if err == nil || err.Error() != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err.Error())
@@ -302,13 +301,12 @@ func TestFSockAuthFailReply(t *testing.T) {
 
 func TestFSockAuthFailRead(t *testing.T) {
 	fs := &FSConn{
-		fsPasswd: "test",
-		rdr:      bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted"))),
-		lgr:      new(nopLogger),
-		conn:     new(connMock3),
+		rdr:  bufio.NewReader(bytes.NewBuffer([]byte("Reply-Text: +OK accepted"))),
+		lgr:  new(nopLogger),
+		conn: new(connMock3),
 	}
 	expected := io.EOF
-	err := fs.auth()
+	err := fs.auth("test")
 
 	if err == nil || err != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
@@ -317,7 +315,7 @@ func TestFSockAuthFailRead(t *testing.T) {
 
 func TestFSockSendBgapiCmdNonNilErr(t *testing.T) {
 	fs := &FSock{
-		fsMux:     &sync.RWMutex{},
+		mu:        &sync.RWMutex{},
 		delayFunc: fibDuration,
 	}
 
@@ -358,7 +356,7 @@ func TestFSockSendMsgCmd(t *testing.T) {
 
 func TestFSockLocalAddrNotConnected(t *testing.T) {
 	fs := &FSock{
-		fsMux: &sync.RWMutex{},
+		mu: &sync.RWMutex{},
 	}
 	addr := fs.LocalAddr()
 	if addr != nil {
@@ -368,7 +366,7 @@ func TestFSockLocalAddrNotConnected(t *testing.T) {
 
 func TestFSockReadEvents(t *testing.T) {
 	fs := &FSock{
-		fsMux:     &sync.RWMutex{},
+		mu:        &sync.RWMutex{},
 		delayFunc: fibDuration,
 	}
 
@@ -429,7 +427,7 @@ func TestFSockSendCmdErrContains(t *testing.T) {
 
 func TestFSockReconnectIfNeeded(t *testing.T) {
 	fs := &FSock{
-		fsMux:      &sync.RWMutex{},
+		mu:         &sync.RWMutex{},
 		logger:     nopLogger{},
 		reconnects: 2,
 		delayFunc:  fibDuration,
@@ -445,7 +443,7 @@ func TestFSockReconnectIfNeeded(t *testing.T) {
 
 func TestFSockSendMsgCmdWithBody(t *testing.T) {
 	fs := &FSock{
-		fsMux:     &sync.RWMutex{},
+		mu:        &sync.RWMutex{},
 		delayFunc: fibDuration,
 	}
 	uuid := "testID"
@@ -464,7 +462,7 @@ func TestFSockSendMsgCmdWithBody(t *testing.T) {
 
 func TestFSockLocalAddr(t *testing.T) {
 	fs := &FSock{
-		fsMux: &sync.RWMutex{},
+		mu: &sync.RWMutex{},
 	}
 	addr := fs.LocalAddr()
 	if addr != nil {
@@ -712,10 +710,11 @@ func TestFSockNewFSockPool(t *testing.T) {
 
 	fspool := &FSockPool{
 		connIdx:       connIdx,
-		fsAddr:        fsaddr,
-		fsPasswd:      fspw,
+		addr:          fsaddr,
+		passwd:        fspw,
 		reconnects:    reconns,
 		maxWaitConn:   maxWait,
+		replyTimeout:  5 * time.Second,
 		eventHandlers: evHandlers,
 		eventFilters:  evFilters,
 		bgapi:         true,
@@ -724,7 +723,7 @@ func TestFSockNewFSockPool(t *testing.T) {
 		fSocks:        nil,
 		stopError:     chanErr,
 	}
-	fsnew := NewFSockPool(maxFSocks, fsaddr, fspw, reconns, maxWait, 0, fibDuration, evHandlers, evFilters, nil, connIdx, true, chanErr)
+	fsnew := NewFSockPool(maxFSocks, fsaddr, fspw, reconns, maxWait, 0, 5*time.Second, fibDuration, evHandlers, evFilters, nil, connIdx, true, chanErr)
 	fsnew.allowedConns = nil
 	fsnew.fSocks = nil
 	fsnew.delayFuncConstructor = nil
@@ -759,7 +758,7 @@ func TestFSockPushFSock(t *testing.T) {
 	}
 	fsk := &FSock{
 		fsConn: fsConn,
-		fsMux:  &sync.RWMutex{},
+		mu:     &sync.RWMutex{},
 	}
 	fs.PushFSock(fsk)
 	if len(fs.fSocks) != 1 {
@@ -772,7 +771,7 @@ func TestFSockPushFSock(t *testing.T) {
 func TestFSockPopFSockEmpty(t *testing.T) {
 	var fs *FSockPool
 
-	expected := "Unconfigured ConnectionPool"
+	expected := "unconfigured connection pool"
 	fsk, err := fs.PopFSock()
 
 	if err == nil || err.Error() != expected {
@@ -829,8 +828,8 @@ func TestFSockPopFSock4(t *testing.T) {
 
 func TestFSockPopFSock5(t *testing.T) {
 	fs := &FSockPool{
-		fsAddr:               "testAddr",
-		fsPasswd:             "testPw",
+		addr:                 "testAddr",
+		passwd:               "testPw",
 		reconnects:           2,
 		maxReconnectInterval: 0,
 		delayFuncConstructor: fibDuration,
