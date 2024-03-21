@@ -21,21 +21,16 @@ import (
 )
 
 // NewFSConn constructs and connects a FSConn
-func NewFSConn(fsAddr, fsPasswd string,
-	connIdx int, lgr logger,
-	evFilters map[string][]string,
-	eventHandlers map[string][]func(string, int),
-	bgapi bool, stopReadEvents chan struct{},
-	readEventsFStopped chan struct{}) (fsConn *FSConn, err error) {
+func NewFSConn(fsAddr, fsPasswd string, connIdx int, connErr chan error, lgr logger,
+	evFilters map[string][]string, eventHandlers map[string][]func(string, int), bgapi bool,
+) (fsConn *FSConn, err error) {
 
 	fsConn = &FSConn{connIdx: connIdx, lgr: lgr, fsPasswd: fsPasswd,
-		eventHandlers:      eventHandlers,
-		repliesChan:        make(chan string),
-		stopReadEvents:     stopReadEvents,
-		readEventsFStopped: readEventsFStopped,
-		errorsChan:         make(chan error),
-		bgapiChan:          make(map[string]chan string),
-		bgapiMux:           new(sync.RWMutex)}
+		eventHandlers: eventHandlers,
+		replies:       make(chan string),
+		err:           connErr,
+		bgapiChan:     make(map[string]chan string),
+		bgapiMux:      new(sync.RWMutex)}
 
 	// Build the TCP connection and the buffer reading it
 	if fsConn.conn, err = net.Dial("tcp", fsAddr); err != nil {
@@ -77,33 +72,42 @@ func NewFSConn(fsAddr, fsPasswd string,
 
 // FSConn represents one connection to FreeSWITCH
 type FSConn struct {
-	connIdx            int // Indetifier for the component using this instance of FSock, optional
-	conn               net.Conn
-	rdr                *bufio.Reader
-	lgr                logger
-	fsPasswd           string
-	repliesChan        chan string
-	stopReadEvents     chan struct{}
-	readEventsFStopped chan struct{}
-	errorsChan         chan error
-	eventHandlers      map[string][]func(string, int) // eventStr, connId
-	bgapiChan          map[string]chan string         // used by bgapi
-	bgapiMux           *sync.RWMutex                  // protects hte bgapiChan map
+	connIdx       int // Indetifier for the component using this instance of FSock, optional
+	conn          net.Conn
+	rdr           *bufio.Reader
+	lgr           logger
+	fsPasswd      string
+	replies       chan string
+	err           chan error
+	eventHandlers map[string][]func(string, int) // eventStr, connId
+	bgapiChan     map[string]chan string         // used by bgapi
+	bgapiMux      *sync.RWMutex                  // protects hte bgapiChan map
 }
 
-// readHeaders reads the headers part out of FreeSWITCH answer
+// readHeaders reads and parses the headers from a FreeSWITCH response.
 func (fsConn *FSConn) readHeaders() (header string, err error) {
-	bytesRead := make([]byte, 0)
-	var readLine []byte
+	bytesRead := make([]byte, 0) // buffer to accumulate header bytes
+	var readLine []byte          // temporary slice to hold each line read
 
 	for {
 		if readLine, err = fsConn.rdr.ReadBytes('\n'); err != nil {
-			fsConn.lgr.Err(fmt.Sprintf("<FSock> Error reading headers: <%s>", err.Error()))
-			fsConn.conn.Close() // any read error leads to disconnection
-			return "", io.EOF
+			fsConn.lgr.Err(fmt.Sprintf(
+				"<FSock> Error reading headers: <%v>", err))
+			fsConn.conn.Close() // close the connection regardless
+
+			// Distinguish between errors to handle reconnect logic. If it's not
+			// a network operation error (net.OpError), return io.EOF to signal a
+			// reconnect. Otherwise, return the actual error encountered.
+			var opErr *net.OpError
+			if !errors.As(err, &opErr) {
+				return "", io.EOF
+			}
+			return "", err
 		}
-		// No Error, add received to localread buffer
+
+		// Check if the line is empty.
 		if len(bytes.TrimSpace(readLine)) == 0 {
+			// Empty line indicates the end of the headers, exit loop.
 			break
 		}
 		bytesRead = append(bytesRead, readLine...)
@@ -233,29 +237,31 @@ func (fsConn *FSConn) readBody(noBytes int) (string, error) {
 	return string(bytesRead), nil
 }
 
-// Read events from network buffer, stop when exitChan is closed, report on errorsChan on error and exit
-// Receive exitChan and errorsChan as parameters so we avoid concurrency on using fs.
+// readEvents continuously reads and processes events from the network buffer. It stops
+// and exits the loop if an error is encountered, after sending it to fsConn.err.
 func (fsConn *FSConn) readEvents() {
 	for {
-		select {
-		case <-fsConn.stopReadEvents:
-			return
-		default: // Unlock waiting here
-		}
 		hdr, body, err := fsConn.readEvent()
+
+		// If an error occurs during the read operation, report
+		// it on the error channel and exit the loop.
 		if err != nil {
-			if err == io.EOF {
-				fsConn.readEventsFStopped <- struct{}{}
-				return // not pushing the error since most probably nobody listens and the channel can be blocked
-			}
-			fsConn.errorsChan <- err
+			fsConn.err <- err
 			return
 		}
-		if strings.Contains(hdr, "api/response") {
-			fsConn.repliesChan <- body
-		} else if strings.Contains(hdr, "command/reply") {
-			fsConn.repliesChan <- headerVal(hdr, "Reply-Text")
-		} else if body != "" { // We got a body, could be event, try dispatching it
+		switch {
+		case strings.Contains(hdr, "api/response"):
+			// For API responses, send the body
+			// directly to the replies channel.
+			fsConn.replies <- body
+
+		case strings.Contains(hdr, "command/reply"):
+			// For command replies, extract the "Reply-Text" from
+			// the header and send it to the replies channel.
+			fsConn.replies <- headerVal(hdr, "Reply-Text")
+
+		case body != "":
+			// Could be an event, try dispatching it.
 			fsConn.dispatchEvent(body)
 		}
 	}
@@ -315,7 +321,7 @@ func (fsConn *FSConn) Send(sndContent string) (rply string, err error) {
 	if err = fsConn.send(sndContent); err != nil {
 		return
 	}
-	rply = <-fsConn.repliesChan
+	rply = <-fsConn.replies
 	if strings.Contains(rply, "-ERR") {
 		return "", errors.New(strings.TrimSpace(rply))
 	}
@@ -339,7 +345,6 @@ func (fsConn *FSConn) SendBgapiCmd(cmdStr string) (out chan string, err error) {
 
 // Disconnect will disconnect the fsConn from FreeSWITCH
 func (fsConn *FSConn) Disconnect() error {
-	close(fsConn.stopReadEvents)
 	return fsConn.conn.Close()
 }
 

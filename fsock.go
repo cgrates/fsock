@@ -10,6 +10,7 @@ package fsock
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"reflect"
@@ -63,8 +64,6 @@ type FSock struct {
 	reconnects           int
 	maxReconnectInterval time.Duration
 	delayFunc            func(time.Duration, time.Duration) func() time.Duration // used to create/reset the delay function
-	stopReadEvents       chan struct{}                                           // Keep a reference towards forkedReadEvents so we can stop them whenever necessary
-	readEventsFStopped   chan struct{}                                           // FSConn will signal the abormal disconnect
 	logger               logger
 	bgapi                bool
 	stopError            chan error // will communicate on final disconnect
@@ -77,30 +76,67 @@ func (fs *FSock) Connect() (err error) {
 	return fs.connect()
 }
 
-// Connect is a non-thread safe connect method
+// connect establishes a connection to FreeSWITCH using the provided configuration details.
+// This method is not thread-safe and should be called with external synchronization if used
+// from multiple goroutines. Upon encountering read errors, it automatically attempts to
+// restart the connection unless the error is intentionally triggered for stopping.
 func (fs *FSock) connect() (err error) {
-	// Reinit readEvents channels so we avoid concurrency issues between goroutines
-	fs.stopReadEvents = make(chan struct{})
-	fs.readEventsFStopped = make(chan struct{})
-	fs.fsConn, err = NewFSConn(fs.fsAddr, fs.fsPasswd,
-		fs.connIdx, fs.logger,
-		fs.eventFilters, fs.eventHandlers,
-		fs.bgapi, fs.stopReadEvents, fs.readEventsFStopped)
+
+	// Create an error channel to listen for connection errors.
+	connErr := make(chan error)
+
+	// Initialize a new FSConn connection instance. Pass configuration and the error channel.
+	fs.fsConn, err = NewFSConn(fs.fsAddr, fs.fsPasswd, fs.connIdx, connErr,
+		fs.logger, fs.eventFilters, fs.eventHandlers, fs.bgapi)
 	if err != nil {
+		return err
+	}
+
+	// Start a goroutine to handle automatic reconnects in case the connection drops.
+	go fs.handleConnectionError(connErr)
+
+	return
+}
+
+// handleConnectionError listens for connection errors and decides whether to attempt a
+// reconnection. It logs errors and manages the stopError channel signaling based on the
+// encountered error.
+func (fs *FSock) handleConnectionError(connErr chan error) {
+	err := <-connErr // Wait for an error signal from readEvents.
+
+	defer func() {
+		// If there's no designated stopError channel, log the error.
+		if fs.stopError == nil {
+			fs.logger.Err(fmt.Sprintf(
+				"<FSock> Error encountered while reading events (connection index: %d): %v",
+				fs.connIdx, err))
+			return
+		}
+		// Otherwise, signal on the stopError channel.
+		// Send nil for intentional shutdown.
+		fs.stopError <- err
+	}()
+
+	// Do not attempt a reconnect for intentional shutdowns.
+	if err != io.EOF {
+		err = nil // Update err to indicate graceful shutdown for deferred func.
 		return
 	}
-	go func() { // automatic restart if the connection was dropped due to read errors
-		if forced := <-fs.readEventsFStopped; forced == struct{}{} {
-			fs.fsMux.RLock()
-			defer fs.fsMux.RUnlock()
-			fs.disconnect()
-			fs.reconnectIfNeeded()
-			if !fs.connected() {
-				fs.stopError <- io.EOF // signal to external sources that we will not attempt reconnect
-			}
-		}
-	}()
-	return
+
+	// Attempt to reconnect if the error indicates a dropped connection (io.EOF).
+	fs.fsMux.RLock()
+	defer fs.fsMux.RUnlock()
+
+	if err := fs.disconnect(); err != nil {
+		fs.logger.Warning(fmt.Sprintf(
+			"<FSock> Failed to disconnect from FreeSWITCH (connection index: %d): %v",
+			fs.connIdx, err))
+	}
+	if err = fs.reconnectIfNeeded(); err != nil {
+		fs.logger.Err(fmt.Sprintf(
+			"<FSock> Failed to reconnect to FreeSWITCH (connection index: %d): %v",
+			fs.connIdx, err))
+	}
 }
 
 // Connected adds up locking on top of normal connected method.

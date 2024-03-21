@@ -124,11 +124,10 @@ func TestReadEvents(t *testing.T) {
 
 func TestFSockConnect(t *testing.T) {
 	fs := &FSock{
-		fsMux:          new(sync.RWMutex),
-		eventHandlers:  make(map[string][]func(string, int)),
-		eventFilters:   make(map[string][]string),
-		stopReadEvents: make(chan struct{}),
-		logger:         nopLogger{},
+		fsMux:         new(sync.RWMutex),
+		eventHandlers: make(map[string][]func(string, int)),
+		eventFilters:  make(map[string][]string),
+		logger:        nopLogger{},
 	}
 
 	err := fs.Connect()
@@ -369,9 +368,8 @@ func TestFSockLocalAddrNotConnected(t *testing.T) {
 
 func TestFSockReadEvents(t *testing.T) {
 	fs := &FSock{
-		fsMux:          &sync.RWMutex{},
-		delayFunc:      fibDuration,
-		stopReadEvents: make(chan struct{}),
+		fsMux:     &sync.RWMutex{},
+		delayFunc: fibDuration,
 	}
 
 	expected := "not connected to FreeSWITCH"
@@ -413,12 +411,12 @@ func TestFSockSendCmdErrSend(t *testing.T) {
 
 func TestFSockSendCmdErrContains(t *testing.T) {
 	fs := &FSConn{
-		lgr:         nopLogger{},
-		conn:        &connMock3{},
-		repliesChan: make(chan string, 1),
+		lgr:     nopLogger{},
+		conn:    &connMock3{},
+		replies: make(chan string, 1),
 	}
 
-	fs.repliesChan <- "test-ERR"
+	fs.replies <- "test-ERR"
 
 	expected := "test-ERR"
 	if rply, err := fs.Send("test"); err == nil || err.Error() != expected {
@@ -490,16 +488,6 @@ func TestFSockreadEvent(t *testing.T) {
 	} else if body != expbody {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expbody, body)
 	}
-}
-
-func TestFSockreadEventsStopRead(t *testing.T) {
-	// nothing to check only for coverage
-	fs := &FSConn{
-		stopReadEvents: make(chan struct{}, 1),
-	}
-
-	close(fs.stopReadEvents)
-	fs.readEvents()
 }
 
 func TestFSockeventsPlainErrSend(t *testing.T) {
@@ -940,11 +928,10 @@ func TestFSockReadBodyTT(t *testing.T) {
 func TestFsConnReadEventErr(t *testing.T) {
 	buf := new(bytes.Buffer)
 	fs := FSConn{
-		rdr:            bufio.NewReaderSize(buf, 8192),
-		lgr:            nopLogger{},
-		conn:           &net.TCPConn{},
-		errorsChan:     make(chan error, 1),
-		stopReadEvents: make(chan struct{}),
+		rdr:  bufio.NewReaderSize(buf, 8192),
+		lgr:  nopLogger{},
+		conn: &net.TCPConn{},
+		err:  make(chan error, 1),
 	}
 
 	_, err := fillBuffer(buf, "Content-Length: error,	Content-Type: text/event-plain \n Event-Name: RE_SCHEDULE \n\n")
@@ -953,7 +940,7 @@ func TestFsConnReadEventErr(t *testing.T) {
 	}
 	fs.readEvents()
 	select {
-	case err = <-fs.errorsChan:
+	case err = <-fs.err:
 		if err == nil {
 			t.Errorf("expected err")
 		}
