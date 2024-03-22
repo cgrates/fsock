@@ -10,6 +10,7 @@ package fsock
 
 import (
 	"errors"
+	"reflect"
 	"time"
 )
 
@@ -26,7 +27,8 @@ func NewFSockPool(maxFSocks int,
 	bgapi bool,
 	stopError chan error,
 ) *FSockPool {
-	if logger == nil {
+	if logger == nil ||
+		(reflect.ValueOf(logger).Kind() == reflect.Ptr && reflect.ValueOf(logger).IsNil()) {
 		logger = nopLogger{}
 	}
 	pool := &FSockPool{

@@ -28,11 +28,11 @@ func NewFSock(addr, passwd string, reconnects int,
 	delayFunc func(time.Duration, time.Duration) func() time.Duration,
 	eventHandlers map[string][]func(string, int),
 	eventFilters map[string][]string,
-	l logger, connIdx int, bgapi bool, stopError chan error,
+	logger logger, connIdx int, bgapi bool, stopError chan error,
 ) (fsock *FSock, err error) {
-	if l == nil ||
-		(reflect.ValueOf(l).Kind() == reflect.Ptr && reflect.ValueOf(l).IsNil()) {
-		l = nopLogger{}
+	if logger == nil ||
+		(reflect.ValueOf(logger).Kind() == reflect.Ptr && reflect.ValueOf(logger).IsNil()) {
+		logger = nopLogger{}
 	}
 	fsock = &FSock{
 		mu:                   new(sync.RWMutex),
@@ -45,7 +45,7 @@ func NewFSock(addr, passwd string, reconnects int,
 		maxReconnectInterval: maxReconnectInterval,
 		replyTimeout:         replyTimeout,
 		delayFunc:            delayFunc,
-		logger:               l,
+		logger:               logger,
 		bgapi:                bgapi,
 		stopError:            stopError,
 	}
