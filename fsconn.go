@@ -11,6 +11,7 @@ package fsock
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -327,18 +328,42 @@ func (fsConn *FSConn) doBackgroundJob(event string) { // add mutex protection
 }
 
 // Send will send the content over the connection, exposing synchronous interface outside
-func (fsConn *FSConn) Send(payload string) (reply string, err error) {
-	if err = fsConn.send(payload); err != nil {
+func (fsConn *FSConn) Send(payload string) (string, error) {
+	if err := fsConn.send(payload); err != nil {
 		return "", err
 	}
-	select {
-	case reply = <-fsConn.replies:
-		if strings.Contains(reply, "-ERR") {
-			return "", errors.New(strings.TrimSpace(reply))
+
+	// Prepare a context based on fsConn.replyTimeout
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if fsConn.replyTimeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), fsConn.replyTimeout)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+	defer cancel()
+
+	replies := make(chan string)
+	replyErrors := make(chan error)
+
+	go func() {
+		select {
+		case reply := <-fsConn.replies:
+			if strings.Contains(reply, "-ERR") {
+				replyErrors <- errors.New(strings.TrimSpace(reply))
+				return
+			}
+			replies <- reply
+		case <-ctx.Done():
+			replyErrors <- ctx.Err()
 		}
+	}()
+
+	select {
+	case reply := <-replies:
 		return reply, nil
-	case <-time.After(fsConn.replyTimeout):
-		return "", errors.New("timeout waiting for FreeSWITCH reply")
+	case err := <-replyErrors:
+		return "", err
 	}
 }
 

@@ -34,9 +34,6 @@ func NewFSock(addr, passwd string, reconnects int,
 		(reflect.ValueOf(l).Kind() == reflect.Ptr && reflect.ValueOf(l).IsNil()) {
 		l = nopLogger{}
 	}
-	if replyTimeout == 0 {
-		replyTimeout = time.Minute // default value, if unset
-	}
 	fsock = &FSock{
 		mu:                   new(sync.RWMutex),
 		connIdx:              connIdx,
