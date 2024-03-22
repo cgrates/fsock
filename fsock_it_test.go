@@ -87,7 +87,7 @@ func testSendCmd(fs *FSock, t *testing.T) {
 	if rply, err := fs.SendCmd(cmd); err != nil {
 		t.Error(err)
 	} else if rply != expected {
-		t.Errorf("Expected: %s , recieved: %s", expected, rply)
+		t.Errorf("Expected: %s , received: %s", expected, rply)
 	}
 }
 
@@ -97,7 +97,7 @@ func testSendApiCmd(fs *FSock, t *testing.T) {
 	if rply, err := fs.SendApiCmd(cmd); err != nil {
 		t.Error(err)
 	} else if rply != expected {
-		t.Errorf("Expected: %s , recieved: %s", expected, rply)
+		t.Errorf("Expected: %s , received: %s", expected, rply)
 	}
 }
 
@@ -111,7 +111,7 @@ func testSendBgapiCmd(fs *FSock, t *testing.T) {
 		select {
 		case rply = <-ch:
 			if rply != expected {
-				t.Errorf("Expected: %q , recieved: %q", expected, rply)
+				t.Errorf("Expected: %q , received: %q", expected, rply)
 			}
 		case <-time.After(5 * time.Second):
 			t.Errorf("Timeout")

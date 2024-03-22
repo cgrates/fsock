@@ -8,13 +8,11 @@ package fsock
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
-	"sort"
+	"slices"
 	"strings"
-	"time"
 )
 
 const EventBodyTag = "EvBody"
@@ -42,13 +40,13 @@ func (nopLogger) Info(string) error    { return nil }
 func (nopLogger) Notice(string) error  { return nil }
 func (nopLogger) Warning(string) error { return nil }
 
-// Convert fseventStr into fseventMap
+// FSEventStrToMap transforms an FreeSWITCH event string into a map, optionally filtering headers.
 func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 	fsevent := make(map[string]string)
 	filtered := (len(headers) != 0)
 	for _, strLn := range strings.Split(fsevstr, "\n") {
 		if hdrVal := strings.SplitN(strLn, ": ", 2); len(hdrVal) == 2 {
-			if filtered && isSliceMember(headers, hdrVal[0]) {
+			if filtered && slices.Contains(headers, hdrVal[0]) {
 				continue // Loop again since we only work on filtered fields
 			}
 			fsevent[hdrVal[0]] = urlDecode(strings.TrimSpace(strings.TrimRight(hdrVal[1], "\n")))
@@ -57,7 +55,8 @@ func FSEventStrToMap(fsevstr string, headers []string) map[string]string {
 	return fsevent
 }
 
-// Converts string received from fsock into a list of channel info, each represented in a map
+// MapChanData parses channel information from a given string coming from fsock
+// into a slice of maps, where each map contains individual channel data.
 func MapChanData(chanInfoStr string, chanDelim string) (chansInfoMap []map[string]string) {
 	chansInfoMap = make([]map[string]string, 0)
 	spltChanInfo := strings.Split(chanInfoStr, "\n")
@@ -109,14 +108,9 @@ func genUUID() string {
 		b[10:])
 }
 
-func toJSON(v interface{}) string {
-	b, _ := json.Marshal(v)
-	return string(b)
-}
-
-// splitIgnoreGroups splits input string by specified separator
-// while ignoring elements grouped using "{}", "[]", or "()"
-func splitIgnoreGroups(s string, sep string, expectedLength int) []string {
+// splitIgnoreGroups splits a string by a separator, excluding elements
+// enclosed in {}, [], or ().
+func splitIgnoreGroups(s, sep string, expectedLength int) []string {
 	if s == "" {
 		return []string{}
 	}
@@ -160,7 +154,7 @@ func splitIgnoreGroups(s string, sep string, expectedLength int) []string {
 	return sl
 }
 
-// Extracts value of a header from anywhere in content string
+// headerVal extracts a header's value from a content string.
 func headerVal(hdrs, hdr string) string {
 	var hdrSIdx, hdrEIdx int
 	if hdrSIdx = strings.Index(hdrs, hdr); hdrSIdx == -1 {
@@ -175,7 +169,7 @@ func headerVal(hdrs, hdr string) string {
 	return strings.TrimSpace(strings.TrimRight(splt[1], "\n"))
 }
 
-// FS event header values are urlencoded. Use this to decode them. On error, use original value
+// urlDecode decodes URL-encoded FS event header values, reverting to the original on error.
 func urlDecode(hdrVal string) string {
 	if valUnescaped, errUnescaping := url.QueryUnescape(hdrVal); errUnescaping == nil {
 		hdrVal = valUnescaped
@@ -191,24 +185,4 @@ func getMapKeys(m map[string][]func(string, int)) (keys []string) {
 		indx++
 	}
 	return
-}
-
-// Binary string search in slice
-func isSliceMember(ss []string, s string) bool {
-	sort.Strings(ss)
-	i := sort.SearchStrings(ss, s)
-	return (i < len(ss) && ss[i] == s)
-}
-
-// fibDuration returns successive Fibonacci numbers converted to time.Duration.
-func fibDuration(durationUnit, maxDuration time.Duration) func() time.Duration {
-	a, b := 0, 1
-	return func() time.Duration {
-		a, b = b, a+b
-		fibNrAsDuration := time.Duration(a) * durationUnit
-		if maxDuration > 0 && maxDuration < fibNrAsDuration {
-			return maxDuration
-		}
-		return fibNrAsDuration
-	}
 }

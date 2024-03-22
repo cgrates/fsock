@@ -126,7 +126,7 @@ func (fsConn *FSConn) readHeaders() (header string, err error) {
 	return string(bytesRead), nil
 }
 
-// Auth to FS
+// auth authenticates the connection with FreeSWITCH using the provided password.
 func (fsConn *FSConn) auth(passwd string) (err error) {
 	if err = fsConn.send("auth " + passwd + "\n\n"); err != nil {
 		fsConn.conn.Close()
@@ -143,7 +143,7 @@ func (fsConn *FSConn) auth(passwd string) (err error) {
 	return
 }
 
-// filterEvents will filter the Events coming from FreeSWITCH
+// filterEvents will filter the Events coming from FreeSWITCH.
 func (fsConn *FSConn) filterEvents(filters map[string][]string, bgapi bool) (err error) {
 	if len(filters) == 0 {
 		return nil
@@ -171,7 +171,7 @@ func (fsConn *FSConn) filterEvents(filters map[string][]string, bgapi bool) (err
 	return nil
 }
 
-// send will send the content over the connection
+// send will send the content over the connection.
 func (fsConn *FSConn) send(sendContent string) (err error) {
 	if _, err = fsConn.conn.Write([]byte(sendContent)); err != nil {
 		fsConn.lgr.Err(fmt.Sprintf("<FSock> Cannot write command to socket <%s>", err.Error()))
@@ -179,7 +179,7 @@ func (fsConn *FSConn) send(sendContent string) (err error) {
 	return
 }
 
-// eventsPlain will subscribe for events in plain mode
+// eventsPlain will subscribe for events in plain mode.
 func (fsConn *FSConn) eventsPlain(events []string, bgapi bool) (err error) {
 	eventsCmd := "event plain"
 	customEvents := ""
@@ -218,7 +218,7 @@ func (fsConn *FSConn) eventsPlain(events []string, bgapi bool) (err error) {
 	return
 }
 
-// readEvent will read one Event from FreeSWITCH, made out of headers and body (if present)
+// readEvent will read one Event from FreeSWITCH, made out of headers and body (if present).
 func (fsConn *FSConn) readEvent() (header string, body string, err error) {
 	if header, err = fsConn.readHeaders(); err != nil {
 		return
