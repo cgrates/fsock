@@ -327,6 +327,19 @@ func TestFSockSendBgapiCmdNonNilErr(t *testing.T) {
 	}
 }
 
+// fibDuration returns successive Fibonacci numbers converted to time.Duration.
+func fibDuration(durationUnit, maxDuration time.Duration) func() time.Duration {
+	a, b := 0, 1
+	return func() time.Duration {
+		a, b = b, a+b
+		fibNrAsDuration := time.Duration(a) * durationUnit
+		if maxDuration > 0 && maxDuration < fibNrAsDuration {
+			return maxDuration
+		}
+		return fibNrAsDuration
+	}
+}
+
 func TestFSockSendMsgCmdWithBodyEmptyArguments(t *testing.T) {
 	fs := &FSock{}
 	uuid := ""

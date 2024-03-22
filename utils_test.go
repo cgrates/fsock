@@ -7,6 +7,7 @@ Provides FreeSWITCH socket communication.
 package fsock
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"sort"
@@ -348,8 +349,13 @@ FreeSWITCH (Version 1.8.2 -3-a98a958ac3 64bit) is ready
 min idle cpu 0.00/99.50
 Current Stack Size/Max 240K/8192K`}
 	if rply := EventToMap(event); !reflect.DeepEqual(rply, expected) {
-		t.Errorf("Expected: %s , recieved: %s", toJSON(expected), toJSON(rply))
+		t.Errorf("Expected: %s , received: %s", toJSON(expected), toJSON(rply))
 	}
+}
+
+func toJSON(v interface{}) string {
+	b, _ := json.Marshal(v)
+	return string(b)
 }
 
 func TestEventToMap2(t *testing.T) {
@@ -389,7 +395,7 @@ Content-Length: 342
 		"Content-Length":            "342",
 	}
 	if rply := EventToMap(event); !reflect.DeepEqual(rply, expected) {
-		t.Errorf("Expected: %s , recieved: %s", toJSON(expected), toJSON(rply))
+		t.Errorf("Expected: %s , received: %s", toJSON(expected), toJSON(rply))
 	}
 }
 
@@ -420,7 +426,7 @@ func TestGetMapKeys(t *testing.T) {
 	sort.Strings(expected)
 	sort.Strings(rply)
 	if !reflect.DeepEqual(expected, rply) {
-		t.Errorf("Expected: %s , recieved: %s", toJSON(expected), toJSON(rply))
+		t.Errorf("Expected: %s , received: %s", toJSON(expected), toJSON(rply))
 	}
 }
 
