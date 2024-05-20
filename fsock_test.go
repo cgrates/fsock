@@ -990,3 +990,105 @@ func BenchmarkFSockReadBody(b *testing.B) {
 		// }
 	}
 }
+
+// mockFreeSWITCH acts as a FreeSWITCH server. It goes through auth and then executes fn.
+// The fn parameter can be customized based on the needs of the test.
+// Returns the address of the listener.
+func mockFreeSWITCH(t *testing.T, fn func(net.Conn)) string {
+	t.Helper()
+
+	// Start a ln on a random open port.
+	ln, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go func() {
+		defer ln.Close()
+		conn, err := ln.Accept()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer conn.Close()
+
+		// Send auth challenge to the client.
+		if _, err := conn.Write([]byte("auth/request\n\n")); err != nil {
+			t.Error(err)
+			return
+		}
+
+		rdr := bufio.NewReader(conn)
+		auth := true
+		for auth {
+			// Read bytes until a newline.
+			bytesRead, err := rdr.ReadBytes('\n')
+			if err != nil {
+				t.Error(err)
+				return
+			}
+
+			// Ignore empty lines.
+			if len(bytes.TrimSpace(bytesRead)) == 0 {
+				continue
+			}
+
+			// Process auth/event plain requests.
+			request := string(bytesRead)
+			switch {
+			case strings.Contains(request, "auth"):
+				_, err = conn.Write([]byte("Reply-Text: +OK accepted\n\n"))
+			case strings.Contains(request, "event plain"):
+				_, err = conn.Write([]byte("Reply-Text: +OK\n\n"))
+
+				// Final step during auth. End the loop.
+				auth = false
+			default:
+				t.Error("unexpected request")
+				return
+			}
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		}
+
+		// Execute the test-specific function after authentication.
+		fn(conn)
+	}()
+	return ln.Addr().String()
+}
+
+func TestFSockHandleConnReset(t *testing.T) {
+	addr := mockFreeSWITCH(t, func(c net.Conn) {
+		// Simulate a syscall.ECONNRESET error by abruptly closing the connection after setting linger to 0.
+		c.(*net.TCPConn).SetLinger(0)
+		c.Close()
+		// Closing the connection after setting linger to 0 causes an immediate reset, simulating a connection reset by peer.
+	})
+
+	stop := make(chan error)
+	fs := &FSock{
+		mu:         &sync.RWMutex{},
+		connIdx:    0,
+		addr:       addr,
+		passwd:     "ClueCon",
+		reconnects: 0, // no need to attempt reconnect
+		logger:     nopLogger{},
+		stopError:  stop,
+		delayFunc:  fibDuration,
+	}
+
+	if err := fs.connect(); err != nil {
+		t.Fatal("failed to connect to FreeSWITCH:", err)
+	}
+
+	// Encountering syscall.ECONNRESET while reading headers should trigger
+	// reconnect attempts. With reconnects set to 0, expect a "not connected" error
+	// on the stopError channel. A nil error means fsock mistakenly considered
+	// the encountered error a signal for intentional shutdown.
+	want := "not connected to FreeSWITCH"
+	err := <-stop
+	if err == nil || err.Error() != want {
+		t.Errorf("conn error: got %v, want %s", err, want)
+	}
+}

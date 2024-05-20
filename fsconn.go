@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -107,10 +108,11 @@ func (fsConn *FSConn) readHeaders() (header string, err error) {
 			fsConn.conn.Close() // close the connection regardless
 
 			// Distinguish between errors to handle reconnect logic. If it's not
-			// a network operation error (net.OpError), return io.EOF to signal a
+			// a network operation error (net.OpError) or if it is a connection
+			// reset error (syscall.ECONNRESET), return io.EOF to signal a
 			// reconnect. Otherwise, return the actual error encountered.
 			var opErr *net.OpError
-			if !errors.As(err, &opErr) {
+			if !errors.As(err, &opErr) || errors.Is(opErr.Err, syscall.ECONNRESET) {
 				return "", io.EOF
 			}
 			return "", err
