@@ -114,9 +114,11 @@ func (fs *FSock) handleConnectionError(connErr chan error) {
 	defer func() {
 		// If there's no designated stopError channel, log the error.
 		if fs.stopError == nil {
-			fs.logger.Err(fmt.Sprintf(
-				"<FSock> Error encountered while reading events (connection index: %d): %v",
-				fs.connIdx, err))
+			if err != nil {
+				fs.logger.Err(fmt.Sprintf(
+					"<FSock> Error encountered while reading events (connection index: %d): %v",
+					fs.connIdx, err))
+			}
 			return
 		}
 		// Otherwise, signal on the stopError channel.
