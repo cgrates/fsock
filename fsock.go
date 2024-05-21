@@ -111,25 +111,10 @@ func (fs *FSock) connect() (err error) {
 func (fs *FSock) handleConnectionError(connErr chan error) {
 	err := <-connErr // Wait for an error signal from readEvents.
 
-	defer func() {
-		// If there's no designated stopError channel, log the error.
-		if fs.stopError == nil {
-			if err != nil {
-				fs.logger.Err(fmt.Sprintf(
-					"<FSock> Error encountered while reading events (connection index: %d): %v",
-					fs.connIdx, err))
-			}
-			return
-		}
-		// Otherwise, signal on the stopError channel.
-		// Send nil for intentional shutdown.
-		fs.stopError <- err
-	}()
-
-	// Do not attempt a reconnect for intentional shutdowns.
 	if err != io.EOF {
-		err = nil // Update err to indicate graceful shutdown for deferred func.
-		return
+		// Signal nil error for intentional shutdowns.
+		fs.signalError(nil)
+		return // don't attempt reconnect
 	}
 
 	// Attempt to reconnect if the error indicates a dropped connection (io.EOF).
@@ -145,7 +130,23 @@ func (fs *FSock) handleConnectionError(connErr chan error) {
 		fs.logger.Err(fmt.Sprintf(
 			"<FSock> Failed to reconnect to FreeSWITCH (connection index: %d): %v",
 			fs.connIdx, err))
+		fs.signalError(err)
 	}
+}
+
+// signalError handles logging or sending the error to the stopError channel.
+func (fs *FSock) signalError(err error) {
+	if fs.stopError == nil {
+		// No stopError channel designated. Log the error if not nil.
+		if err != nil {
+			fs.logger.Err(fmt.Sprintf(
+				"<FSock> Error encountered while reading events (connection index: %d): %v",
+				fs.connIdx, err))
+		}
+		return
+	}
+	// Otherwise, signal on the stopError channel.
+	fs.stopError <- err
 }
 
 // Connected adds up locking on top of normal connected method.
