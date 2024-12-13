@@ -223,18 +223,19 @@ func (fsConn *FSConn) eventsPlain(events []string, bgapi bool) (err error) {
 // readEvent will read one Event from FreeSWITCH, made out of headers and body (if present).
 func (fsConn *FSConn) readEvent() (header string, body string, err error) {
 	if header, err = fsConn.readHeaders(); err != nil {
-		return
+		return "", "", err
 	}
 	if !strings.Contains(header, "Content-Length") { //No body
-		return
+		return header, "", nil
 	}
-	var cl int
-	if cl, err = strconv.Atoi(headerVal(header, "Content-Length")); err != nil {
-		err = fmt.Errorf("cannot extract content length, err: <%s>", err)
-		return
+	cl, err := strconv.Atoi(headerVal(header, "Content-Length"))
+	if err != nil {
+		return "", "", fmt.Errorf("invalid Content-Length header: %v", err)
 	}
-	body, err = fsConn.readBody(cl)
-	return
+	if body, err = fsConn.readBody(cl); err != nil {
+		return "", "", err
+	}
+	return header, body, nil
 }
 
 // readBody reads the specified number of bytes from the buffer.
