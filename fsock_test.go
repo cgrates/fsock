@@ -489,8 +489,8 @@ func TestFSockreadEvent(t *testing.T) {
 		lgr: nopLogger{},
 	}
 
-	expected := fmt.Sprintf("cannot extract content length, err: <%s>", "strconv.Atoi: parsing \"\": invalid syntax")
-	exphead := "Content-Length\n"
+	expected := `invalid Content-Length header: strconv.Atoi: parsing "": invalid syntax`
+	exphead := ""
 	expbody := ""
 	if head, body, err := fs.readEvent(); err == nil || err.Error() != expected {
 		t.Errorf("\nExpected: <%+v>, \nReceived: <%+v>", expected, err)
@@ -1066,7 +1066,6 @@ func TestFSockHandleConnReset(t *testing.T) {
 		// Closing the connection after setting linger to 0 causes an immediate reset, simulating a connection reset by peer.
 	})
 
-	stop := make(chan error)
 	fs := &FSock{
 		mu:         &sync.RWMutex{},
 		connIdx:    0,
@@ -1074,10 +1073,9 @@ func TestFSockHandleConnReset(t *testing.T) {
 		passwd:     "ClueCon",
 		reconnects: 0, // no need to attempt reconnect
 		logger:     nopLogger{},
-		stopError:  stop,
+		stopError:  make(chan error),
 		delayFunc:  fibDuration,
 	}
-
 	if err := fs.connect(); err != nil {
 		t.Fatal("failed to connect to FreeSWITCH:", err)
 	}
@@ -1087,8 +1085,83 @@ func TestFSockHandleConnReset(t *testing.T) {
 	// on the stopError channel. A nil error means fsock mistakenly considered
 	// the encountered error a signal for intentional shutdown.
 	want := "not connected to FreeSWITCH"
-	err := <-stop
+	err := <-fs.stopError
 	if err == nil || err.Error() != want {
 		t.Errorf("conn error: got %v, want %s", err, want)
+	}
+}
+
+func TestFSockDisconnectIntentional(t *testing.T) {
+	stopFS := make(chan struct{})
+	t.Cleanup(func() { close(stopFS) })
+	addr := mockFreeSWITCH(t, func(net.Conn) {
+		<-stopFS
+	})
+
+	fs := &FSock{
+		mu:         &sync.RWMutex{},
+		connIdx:    0,
+		addr:       addr,
+		passwd:     "ClueCon",
+		reconnects: 5,
+		logger:     nopLogger{},
+		stopError:  make(chan error),
+		delayFunc:  fibDuration,
+	}
+
+	if err := fs.connect(); err != nil {
+		t.Fatal("failed to connect to FreeSWITCH:", err)
+	}
+
+	if err := fs.disconnect(); err != nil {
+		t.Fatal("failed to disconnect from FreeSWITCH:", err)
+	}
+
+	err := <-fs.stopError
+	if err != nil {
+		t.Errorf("want <-fs.stopError nil (signals intentional shutdown), got %v", err)
+	}
+}
+
+// type mockLogger struct {
+// 	nopLogger
+// }
+//
+// func (m mockLogger) Err(s string) error {
+// 	log.Print(s)
+// 	return nil
+// }
+
+func TestFSockDisconnectUnexpectedErr(t *testing.T) {
+	t.Skip("skipped until intentional shutdown errors are separated")
+	stopFS := make(chan struct{})
+	t.Cleanup(func() { close(stopFS) })
+	addr := mockFreeSWITCH(t, func(c net.Conn) {
+		header := "Content-Type: text/disconnect-notice\nContent-Length: abc\n\n"
+		if _, err := c.Write([]byte(header)); err != nil {
+			t.Error(err)
+		}
+		<-stopFS
+	})
+
+	fs := &FSock{
+		mu:         &sync.RWMutex{},
+		connIdx:    0,
+		addr:       addr,
+		passwd:     "ClueCon",
+		reconnects: 1,
+		logger:     nopLogger{},
+		stopError:  make(chan error),
+		delayFunc:  fibDuration,
+	}
+
+	if err := fs.connect(); err != nil {
+		t.Fatal("failed to connect to FreeSWITCH:", err)
+	}
+
+	wantErr := `invalid Content-Length header: strconv.Atoi: parsing "abc": invalid syntax`
+	err := <-fs.stopError
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("<-fs.stopError=%q, want %q", err, wantErr)
 	}
 }
