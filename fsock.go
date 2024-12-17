@@ -110,7 +110,7 @@ func (fs *FSock) connect() (err error) {
 // encountered error.
 func (fs *FSock) handleConnectionError(connErr chan error) {
 	err := <-connErr // Wait for an error signal from readEvents.
-
+	fs.logger.Err(fmt.Sprintf("<FSock> readEvents error (connection index: %d): %v", fs.connIdx, err))
 	if err != io.EOF {
 		// Signal nil error for intentional shutdowns.
 		fs.signalError(nil)
