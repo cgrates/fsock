@@ -107,12 +107,15 @@ func (fsConn *FSConn) readHeaders() (header string, err error) {
 				"<FSock> Error reading headers: <%v>", err))
 			fsConn.conn.Close() // close the connection regardless
 
-			// Distinguish between errors to handle reconnect logic. If it's not
-			// a network operation error (net.OpError) or if it is a connection
-			// reset error (syscall.ECONNRESET), return io.EOF to signal a
-			// reconnect. Otherwise, return the actual error encountered.
+			// Distinguish between different types of network errors to handle reconnection:
+			// Return io.EOF (triggering a reconnect) if either:
+			// - The error is not a network operation error (net.OpError)
+			// - The connection timed out (opErr.Timeout())
+			// - The connection was reset by peer (syscall.ECONNRESET)
+			// For all other network operation errors, return the original error.
 			var opErr *net.OpError
-			if !errors.As(err, &opErr) || errors.Is(opErr.Err, syscall.ECONNRESET) {
+			if !errors.As(err, &opErr) || opErr.Timeout() ||
+				errors.Is(opErr.Err, syscall.ECONNRESET) {
 				return "", io.EOF
 			}
 			return "", err
