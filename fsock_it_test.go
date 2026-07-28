@@ -1,12 +1,9 @@
 //go:build integration
 // +build integration
 
-/*
-fsock_it_test.go is released under the MIT License <http://www.opensource.org/licenses/mit-license.php
-Copyright (C) ITsysCOM. All Rights Reserved.
+// Copyright ITsysCOM GmbH
+// SPDX-License-Identifier: MIT
 
-Provides FreeSWITCH socket communication.
-*/
 package fsock
 
 import (

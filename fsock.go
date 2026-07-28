@@ -1,10 +1,5 @@
-/*
-fsock.go is released under the MIT License <http://www.opensource.org/licenses/mit-license.php
-Copyright (C) ITsysCOM. All Rights Reserved.
-
-Provides FreeSWITCH socket communication.
-
-*/
+// Copyright ITsysCOM GmbH
+// SPDX-License-Identifier: MIT
 
 package fsock
 
